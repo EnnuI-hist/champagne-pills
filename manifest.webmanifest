@@ -1,0 +1,24 @@
+{
+  "name": "champagne&pills",
+  "short_name": "c&p",
+  "description": "Личный медиа-хаб для видео, лекций и сериалов",
+  "start_url": "/champagne-pills/",
+  "scope": "/champagne-pills/",
+  "display": "standalone",
+  "background_color": "#060609",
+  "theme_color": "#060609",
+  "icons": [
+    {
+      "src": "/champagne-pills/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/champagne-pills/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
