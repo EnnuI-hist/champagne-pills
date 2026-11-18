@@ -4,12 +4,12 @@ import {
   Sparkles,
   Plus,
   Search,
-  Bell,
   Dices,
   Trash2,
   FileJson,
 } from 'lucide-react'
 import { BrandWordmark } from './BrandWordmark'
+import { PomodoroPopover } from './PomodoroPopover'
 import type { ThemePreset } from '../types'
 import { PRESET_DATA } from '../hooks/useTheme'
 
@@ -18,15 +18,19 @@ interface HeaderProps {
   onOpenTheme: () => void
   onOpenAdd: () => void
   onOpenCommand: () => void
-  onOpenPomodoro: () => void
   onOpenRoulette: () => void
   onOpenTrash: () => void
   onOpenExport: () => void
   totalPinsCount?: number
   deletedPinsCount?: number
-  isPomodoroRunning?: boolean
-  pomodoroDisplay?: string
-  pomodoroPhase?: 'work' | 'break' | 'idle'
+  isPomodoroRunning: boolean
+  pomodoroDisplay: string
+  pomodoroPhase: 'work' | 'break' | 'idle'
+  onPomodoroStart: () => void
+  onPomodoroPause: () => void
+  onPomodoroReset: () => void
+  onSelectPomodoroPreset: (work: number, brk: number) => void
+  currentWorkMin: number
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -34,15 +38,19 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTheme,
   onOpenAdd,
   onOpenCommand,
-  onOpenPomodoro,
   onOpenRoulette,
   onOpenTrash,
   onOpenExport,
   totalPinsCount = 0,
   deletedPinsCount = 0,
-  isPomodoroRunning = false,
-  pomodoroDisplay = '',
-  pomodoroPhase = 'idle',
+  isPomodoroRunning,
+  pomodoroDisplay,
+  pomodoroPhase,
+  onPomodoroStart,
+  onPomodoroPause,
+  onPomodoroReset,
+  onSelectPomodoroPreset,
+  currentWorkMin,
 }) => {
   const presetInfo = PRESET_DATA[currentPreset]
 
@@ -87,27 +95,17 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Actions Bar */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Pomodoro Focus Button */}
-          <button
-            type="button"
-            onClick={onOpenPomodoro}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-              isPomodoroRunning
-                ? pomodoroPhase === 'break'
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                  : 'btn-rose text-[#ff2a85] font-semibold animate-pulse'
-                : 'dock-btn text-white/70 hover:text-white'
-            }`}
-            title="Фокус и Pomodoro-таймер (Brown noise / Дождь)"
-          >
-            <Bell size={14} className={isPomodoroRunning ? 'animate-bounce' : ''} />
-            <span
-              className="hidden sm:inline"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
-            >
-              {isPomodoroRunning ? pomodoroDisplay : 'Фокус'}
-            </span>
-          </button>
+          {/* Pomodoro Focus & Noise Popover Widget in Header */}
+          <PomodoroPopover
+            display={pomodoroDisplay}
+            phase={pomodoroPhase}
+            running={isPomodoroRunning}
+            onStart={onPomodoroStart}
+            onPause={onPomodoroPause}
+            onReset={onPomodoroReset}
+            onSelectPreset={onSelectPomodoroPreset}
+            currentWorkMin={currentWorkMin}
+          />
 
           {/* Roulette Button */}
           <button

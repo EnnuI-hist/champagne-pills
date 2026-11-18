@@ -70,3 +70,40 @@ export function setNoiseVolume(v: number): void {
 }
 
 export function getCurrentNoiseType(): NoiseType { return currentType }
+
+/**
+ * Procedural gentle chime sound for Pomodoro phase completion
+ */
+export function playChime(): void {
+  try {
+    const ctx = getCtx()
+    if (ctx.state === 'suspended') ctx.resume()
+    const now = ctx.currentTime
+
+    // Pleasant dual-tone bell (587.33 Hz D5 + 880 Hz A5)
+    const osc1 = ctx.createOscillator()
+    const osc2 = ctx.createOscillator()
+    const gain = ctx.createGain()
+
+    osc1.type = 'sine'
+    osc1.frequency.setValueAtTime(587.33, now)
+    osc1.frequency.exponentialRampToValueAtTime(880, now + 0.18)
+
+    osc2.type = 'triangle'
+    osc2.frequency.setValueAtTime(880, now)
+
+    gain.gain.setValueAtTime(0.18, now)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2)
+
+    osc1.connect(gain)
+    osc2.connect(gain)
+    gain.connect(ctx.destination)
+
+    osc1.start(now)
+    osc2.start(now)
+    osc1.stop(now + 1.2)
+    osc2.stop(now + 1.2)
+  } catch {
+    // Graceful fallback if AudioContext is not yet unlocked
+  }
+}

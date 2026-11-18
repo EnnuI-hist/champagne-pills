@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { playChime } from '../utils/audio'
 
 export type PomodoroPhase = 'work' | 'break' | 'idle'
 
@@ -9,20 +10,27 @@ export function usePomodoro(workMin = 45, breakMin = 10) {
   const interval = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const tick = useCallback(() => {
-    setSecondsLeft(prev => {
+    setSecondsLeft((prev) => {
       if (prev <= 1) {
-        // phase switch
-        setPhase(ph => {
+        // Play gentle chime
+        playChime()
+
+        // Phase switch
+        setPhase((ph) => {
           if (ph === 'work') {
             setSecondsLeft(breakMin * 60)
-            try { new Notification('champagne&pills', { body: '☕ Перерыв!' }) } catch {}
+            try {
+              new Notification('champagne&pills', { body: '☕ Перерыв!' })
+            } catch {}
             return 'break'
           }
           setSecondsLeft(workMin * 60)
-          try { new Notification('champagne&pills', { body: '📚 Пора работать!' }) } catch {}
+          try {
+            new Notification('champagne&pills', { body: '📚 Пора работать!' })
+          } catch {}
           return 'work'
         })
-        return breakMin * 60 // fallback, will be overwritten
+        return breakMin * 60 // fallback
       }
       return prev - 1
     })
@@ -34,22 +42,33 @@ export function usePomodoro(workMin = 45, breakMin = 10) {
     } else if (interval.current) {
       clearInterval(interval.current)
     }
-    return () => { if (interval.current) clearInterval(interval.current) }
+    return () => {
+      if (interval.current) clearInterval(interval.current)
+    }
   }, [running, tick])
 
   const start = useCallback(() => {
-    if (phase === 'idle') { setPhase('work'); setSecondsLeft(workMin * 60) }
+    if (phase === 'idle') {
+      setPhase('work')
+      setSecondsLeft(workMin * 60)
+    }
     setRunning(true)
-    if (Notification.permission === 'default') Notification.requestPermission()
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
   }, [phase, workMin])
 
   const pause = useCallback(() => setRunning(false), [])
 
   const reset = useCallback(() => {
-    setRunning(false); setPhase('idle'); setSecondsLeft(workMin * 60)
+    setRunning(false)
+    setPhase('idle')
+    setSecondsLeft(workMin * 60)
   }, [workMin])
 
-  const display = `${String(Math.floor(secondsLeft / 60)).padStart(2,'0')}:${String(secondsLeft % 60).padStart(2,'0')}`
+  const display = `${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(
+    secondsLeft % 60,
+  ).padStart(2, '0')}`
 
   return { phase, running, secondsLeft, display, start, pause, reset }
 }

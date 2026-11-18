@@ -287,7 +287,6 @@ export default function App() {
             setShowAddModal(true)
           }}
           onOpenCommand={() => setShowCommandPalette(true)}
-          onOpenPomodoro={() => setShowPomodoroModal(true)}
           onOpenRoulette={() => setShowRouletteModal(true)}
           onOpenTrash={() => setShowTrashModal(true)}
           onOpenExport={() => setShowExportModal(true)}
@@ -296,6 +295,11 @@ export default function App() {
           isPomodoroRunning={pomodoro.running}
           pomodoroDisplay={pomodoro.display}
           pomodoroPhase={pomodoro.phase}
+          onPomodoroStart={pomodoro.start}
+          onPomodoroPause={pomodoro.pause}
+          onPomodoroReset={pomodoro.reset}
+          onSelectPomodoroPreset={handleSelectPomodoroPreset}
+          currentWorkMin={workMin}
         />
 
         {/* Browser Quick Dock */}
