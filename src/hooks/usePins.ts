@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Pin, Category, Status, QuickLink } from '../types'
+import type { Pin, Category, Status, StatusFilter, QuickLink } from '../types'
 import { loadPins, savePins, getDemoData, loadQuickLinks, saveQuickLinks } from '../utils/storage'
 
 /* ───── Undo delete queue ───── */
@@ -79,21 +79,51 @@ export function usePins() {
     })
   }, [])
 
+  const movePinUp = useCallback((id: string) => {
+    setPins(prev => {
+      const idx = prev.findIndex(p => p.id === id)
+      if (idx <= 0) return prev
+      const n = [...prev]
+      const [item] = n.splice(idx, 1)
+      n.splice(idx - 1, 0, item)
+      savePins(n)
+      return n
+    })
+  }, [])
+
+  const movePinDown = useCallback((id: string) => {
+    setPins(prev => {
+      const idx = prev.findIndex(p => p.id === id)
+      if (idx === -1 || idx >= prev.length - 1) return prev
+      const n = [...prev]
+      const [item] = n.splice(idx, 1)
+      n.splice(idx + 1, 0, item)
+      savePins(n)
+      return n
+    })
+  }, [])
+
   return {
     pins, loaded, addPin, updatePin, softDelete, hardDelete, undoDelete,
-    restoreFromTrash, emptyTrash, clearDemo, moveToTop, sync, undoQueue,
+    restoreFromTrash, emptyTrash, clearDemo, moveToTop, movePinUp, movePinDown, sync, undoQueue,
   }
 }
 
 /* ───── Filtered pins ───── */
 export function useFilteredPins(
   pins: Pin[], category: Category, search: string,
-  statusFilter: Status | 'all', historyPeriod?: string, tag?: string,
+  statusFilter: StatusFilter, historyPeriod?: string, tag?: string,
 ) {
   const active = pins.filter(p => p.status !== 'deleted')
   const filtered = active.filter(pin => {
     if (category !== 'all' && pin.category !== category) return false
-    if (statusFilter !== 'all' && pin.status !== statusFilter) return false
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'archive') {
+        if (pin.status !== 'completed' && pin.status !== 'archived') return false
+      } else if (pin.status !== statusFilter) {
+        return false
+      }
+    }
     if (historyPeriod && pin.historyPeriod !== historyPeriod) return false
     if (tag && !(pin.tags || []).includes(tag)) return false
     if (search) {

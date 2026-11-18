@@ -2,6 +2,7 @@
 export type Platform = 'youtube' | 'rutube' | 'vk' | 'vimeo' | 'anime' | 'web'
 export type ContentType = 'lecture' | 'anime' | 'movie' | 'video' | 'series'
 export type Status = 'watching' | 'queued' | 'completed' | 'archived' | 'deleted'
+export type StatusFilter = 'all' | 'watching' | 'queued' | 'archive'
 export type Category = 'all' | 'history' | 'anime' | 'video'
 
 export type HistoryPeriod =
@@ -18,8 +19,8 @@ export const HISTORY_PERIOD_LABELS: Record<HistoryPeriod, string> = {
   ancient: 'Древняя Русь',
   appanage: 'Удельный период',
   moscow: 'Московское царство',
-  empire_early: 'Петр I — Екатерина II',
-  empire_late: 'Империя: XIX — нач. XX в.',
+  empire_early: 'Империя XVIII в.',
+  empire_late: 'Империя XIX – нач. XX в.',
   ussr_early: 'СССР: Ленин / Сталин / ВОВ',
   ussr_late: 'Поздний СССР',
   culture: 'Культура и Историография',

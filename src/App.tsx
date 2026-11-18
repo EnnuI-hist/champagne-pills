@@ -10,7 +10,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { TrashModal } from './components/TrashModal'
 import { ExportModal } from './components/ExportModal'
 import { ToastUndo } from './components/ToastUndo'
-import { HeroCard } from './components/HeroCard'
+import { HeroSection } from './components/HeroCard'
 import { PinGrid } from './components/PinGrid'
 
 import { useTheme } from './hooks/useTheme'
@@ -19,7 +19,7 @@ import { usePomodoro } from './hooks/usePomodoro'
 import { loadQuickLinks, saveQuickLinks } from './utils/storage'
 import { getBlobUrl } from './utils/db'
 
-import type { Pin, QuickLink, Category, Status, HistoryPeriod } from './types'
+import type { Pin, QuickLink, Category, StatusFilter, HistoryPeriod } from './types'
 
 export default function App() {
   // Theme & Atmosphere
@@ -38,6 +38,8 @@ export default function App() {
     restoreFromTrash,
     emptyTrash,
     undoQueue,
+    movePinUp,
+    movePinDown,
     sync,
   } = usePins()
 
@@ -72,7 +74,7 @@ export default function App() {
 
   // Filters & State
   const [category, setCategory] = useState<Category>('all')
-  const [statusFilter, setStatusFilter] = useState<Status | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [historyPeriodFilter, setHistoryPeriodFilter] = useState<HistoryPeriod | undefined>()
   const [search, setSearch] = useState('')
   const [selectedTag, setSelectedTag] = useState<string | undefined>()
@@ -98,6 +100,9 @@ export default function App() {
     pomodoro.reset()
   }
 
+  // All active pins (not in trash)
+  const allActivePins = useMemo(() => pins.filter((p) => p.status !== 'deleted'), [pins])
+
   // Filtered Pins
   const { filtered, trash } = useFilteredPins(
     pins,
@@ -117,21 +122,24 @@ export default function App() {
     return Array.from(set)
   }, [pins])
 
-  // Focus Hero: The highest-priority watching pin
-  const heroPin = useMemo(() => {
-    if (category !== 'all' || statusFilter !== 'all' || search.trim() || historyPeriodFilter || selectedTag) {
-      return null
+  // Focus Hero: Up to 2 pinned cards (or watching cards if none are explicitly pinned)
+  const heroPins = useMemo(() => {
+    // Hide hero if search query, sub-period or tag filter is active
+    if (search.trim() || historyPeriodFilter || selectedTag) {
+      return []
     }
-    const pinnedWatching = pins.find((p) => p.isPinned && p.status === 'watching')
-    if (pinnedWatching) return pinnedWatching
-    return pins.find((p) => p.status === 'watching') || null
-  }, [pins, category, statusFilter, search, historyPeriodFilter, selectedTag])
+    const pinned = allActivePins.filter((p) => p.isPinned)
+    if (pinned.length > 0) return pinned.slice(0, 2)
+    const watching = allActivePins.filter((p) => p.status === 'watching')
+    return watching.slice(0, 2)
+  }, [allActivePins, search, historyPeriodFilter, selectedTag])
 
   // Remaining pins (exclude hero if displayed)
   const displayPins = useMemo(() => {
-    if (!heroPin) return filtered
-    return filtered.filter((p) => p.id !== heroPin.id)
-  }, [filtered, heroPin])
+    if (heroPins.length === 0) return filtered
+    const heroIds = new Set(heroPins.map((p) => p.id))
+    return filtered.filter((p) => !heroIds.has(p.id))
+  }, [filtered, heroPins])
 
   // Pin Actions
   const handleTogglePin = useCallback(
@@ -152,6 +160,34 @@ export default function App() {
           ...target,
           currentEpisode: newEp,
           currentEp: newEp,
+          updatedAt: new Date().toISOString(),
+        })
+      }
+    },
+    [pins, updatePin],
+  )
+
+  const handleUpdateTimecode = useCallback(
+    (id: string, newTimecode: string) => {
+      const target = pins.find((p) => p.id === id)
+      if (target) {
+        updatePin({
+          ...target,
+          timecode: newTimecode,
+          updatedAt: new Date().toISOString(),
+        })
+      }
+    },
+    [pins, updatePin],
+  )
+
+  const handleUpdateRating = useCallback(
+    (id: string, newRating: number) => {
+      const target = pins.find((p) => p.id === id)
+      if (target) {
+        updatePin({
+          ...target,
+          rating: newRating > 0 ? newRating : undefined,
           updatedAt: new Date().toISOString(),
         })
       }
@@ -255,7 +291,7 @@ export default function App() {
           onOpenRoulette={() => setShowRouletteModal(true)}
           onOpenTrash={() => setShowTrashModal(true)}
           onOpenExport={() => setShowExportModal(true)}
-          totalPinsCount={pins.filter((p) => p.status !== 'deleted').length}
+          totalPinsCount={allActivePins.length}
           deletedPinsCount={trash.length}
           isPomodoroRunning={pomodoro.running}
           pomodoroDisplay={pomodoro.display}
@@ -271,17 +307,17 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {/* Hero Section ("Сейчас в фокусе") */}
-          {heroPin && (
-            <HeroCard
-              pin={heroPin}
-              onPlay={(p) => setActivePlayerPin(p)}
-            />
-          )}
+          {/* Hero Section ("Сейчас в фокусе" - 1-2 главных закрепленных карточки) */}
+          <HeroSection
+            pins={heroPins}
+            onPlay={(p) => setActivePlayerPin(p)}
+            onTogglePin={handleTogglePin}
+          />
 
           {/* Pin Grid & Navigation */}
           <PinGrid
             pins={displayPins}
+            allActivePins={allActivePins}
             category={category}
             onCategoryChange={setCategory}
             statusFilter={statusFilter}
@@ -296,6 +332,10 @@ export default function App() {
             onTogglePin={handleTogglePin}
             onDeletePin={softDelete}
             onUpdateEpisode={handleUpdateEpisode}
+            onUpdateTimecode={handleUpdateTimecode}
+            onUpdateRating={handleUpdateRating}
+            onMoveUp={movePinUp}
+            onMoveDown={movePinDown}
             onOpenAddModal={() => {
               setInitialPasteUrl('')
               setShowAddModal(true)
