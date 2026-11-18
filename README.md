@@ -1,32 +1,105 @@
-# React + TypeScript + Vite
+# champagne&pills 🍾💊
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+> **Dark Editorial Lounge & Personal Media Hub** — замена десяткам закрепленных вкладок в браузере для лекций, видеоэссе, курсов и аниме.
 
-Currently, two official plugins are available:
+![champagne&pills preview](public/icon-512.svg)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Ключевые возможности
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 1. 🎨 Эстетика Late-Night Lounge & Neon (Awwwards Style)
+- **4 неоновые темы оформления**:
+  - `Champagne & Rose` (золотистый `#f3e5ab` + розовый неон `#ff2a85` — по умолчанию)
+  - `Cyber Violet` (кибер-фиолетовый + аквамарин)
+  - `Emerald Noir` (изумрудный монохром)
+  - `Crimson Velvet` (рубиновый нуар)
+- **Кастомный фон в IndexedDB**: загрузка любого изображения с ПК или вставка из буфера (`Ctrl+V`), автоматическое сжатие в WebP до 900px, плавные ползунки затемнения (0–90%) и размытия (0–30px).
+- **Типографика**:
+  - `Playfair Display` (курсив для акцентных заголовков и брендинга `champagne`)
+  - `Plus Jakarta Sans` (четкий современный гротеск для интерфейса и `pills`)
+  - `JetBrains Mono` (все цифры, счетчики серий, таймкоды, бейджи и хоткеи)
 
-## Expanding the Oxlint configuration
+### 2. ⚡ Быстрый ввод и умный автопарсинг
+- **Глобальный перехват `Ctrl+V`**: находясь в любом месте сайта вне полей ввода, нажмите `Ctrl+V` со скопированной ссылкой — модалка создания закрепа откроется автоматически с предзаполненными данными.
+- **Хоткей `N`**: быстрое создание нового закрепа в одно нажатие.
+- **Автопарсинг без API-ключей**:
+  - YouTube (полноразмерные постеры `hqdefault`, автоматическое извлечение названий и авторов через oEmbed)
+  - Rutube, VK, Vimeo, Web, Anime
+- **Drag-and-Drop постеров**: перетаскивание картинки или вставка постера прямо из буфера обмена со сжатием в WebP.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+### 3. 🏛️ Подпериоды истории (ЕГЭ / Олимпиады)
+- Фильтрация и каталогизация по ключевым историческим эпохам:
+  - *Древняя Русь*
+  - *Удельный период*
+  - *Московское царство*
+  - *Петр I — Екатерина II*
+  - *Империя: XIX — нач. XX в.*
+  - *СССР: Ленин / Сталин / ВОВ*
+  - *Поздний СССР*
+  - *Культура и Историография*
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 4. 🎬 Split-Screen Кинозал & Конспекты
+- Встроенный 16:9 плеер с атмосферной подсветкой **Ambilight**.
+- Таймкод остановки с автоматической генерацией прямых ссылок (`&t=...`).
+- Конспект лекций в реальном времени с поддержкой Markdown и кнопкой мгновенного копирования в буфер обмена.
+- **Таймкод-маркеры**: сохранение ключевых моментов видео с переходами в 1 клик.
+- **Эпизод-трекер**: кнопки `-` / `+1` для аниме и сериалов, прогресс-бар и выбор студии озвучки.
+
+### 5. 🧘 Модуль концентрации & Pomodoro
+- Режимы таймера: `45 / 10 мин (Deep Work)` и `25 / 5 мин (Классика)`.
+- **Генератор шума на Web Audio API**:
+  - *Brown Noise* (глубокий ровный спектр для подавления отвлекающих шумов)
+  - *Rain Noise* (успокаивающий шум дождя с модуляцией)
+  - Регулировка громкости
+- Нативные уведомления браузера об окончании фазы.
+
+### 6. 🎲 Медиа-рулетка & Command Palette (`Ctrl+K`)
+- **Рулетка**: анимированный случайный выбор из очереди закрепов (`queued`).
+- **Command Palette (`Ctrl+K`)**: быстрый глобальный поиск по заголовкам, авторам, тегам, ссылкам Quick Dock и командам навигации с управлением стрелками.
+
+### 7. 💾 Безопасность и хранение данных
+- **Локальное хранилище**: `localStorage` для метаданных + `IndexedDB` для тяжелых обложек и обоев.
+- **Корзина & 6-секундный Undo Toast**: случайное удаление легко отменяется прямо из всплывающего уведомления.
+- **Экспорт и импорт в JSON**: резервное копирование в файл или буфер обмена для переноса между устройствами без сторонних серверов.
+
+---
+
+## ⌨️ Горячие клавиши
+
+| Сочетание | Действие |
+|---|---|
+| `Ctrl+V` / `Cmd+V` (вне инпутов) | Мгновенно открыть модалку и распарсить ссылку из буфера |
+| `N` (вне инпутов) | Открыть окно создания нового закрепа |
+| `Ctrl+K` / `Cmd+K` | Открыть Command Palette (поиск и команды) |
+| `Esc` | Закрыть любое активное модальное окно |
+
+---
+
+## 🚀 Запуск и сборка
+
+```bash
+# Установка зависимостей
+npm install
+
+# Запуск локального сервера разработки
+npm run dev
+
+# Проверка типов и сборка в dist
+npm run build
+
+# Деплой на GitHub Pages
+npm run deploy
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+---
+
+## 📦 PWA & Десктоп
+
+Приложение полностью адаптировано как **Progressive Web App (PWA)**:
+1. Откройте сайт в Chrome / Edge / Brave / Safari.
+2. Нажмите иконку «Установить» в адресной строке браузера.
+3. Приложение откроется в отдельном окне без адресной строки и рамок браузера как нативный десктопный клиент.
+
+---
+*champagne&pills • 2026*
