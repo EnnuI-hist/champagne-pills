@@ -31,7 +31,7 @@ export function usePins() {
     setPins(prev => {
       const target = prev.find(p => p.id === id)
       if (!target) return prev
-      const deleted = { ...target, status: 'deleted' as Status, deletedAt: new Date().toISOString() }
+      const deleted = { ...target, status: 'deleted' as Status, isDeleted: true, deletedAt: new Date().toISOString() }
       const n = prev.map(p => p.id === id ? deleted : p)
       savePins(n)
       // undo timer (6s)
@@ -48,7 +48,8 @@ export function usePins() {
     if (!item) return
     clearTimeout(item.timeout)
     setUndoQueue(q => q.filter(u => u.pin.id !== id))
-    setPins(prev => { const n = prev.map(p => p.id === id ? item.pin : p); savePins(n); return n })
+    const restoredPin = { ...item.pin, isDeleted: false, status: item.pin.status === 'deleted' ? ('queued' as Status) : item.pin.status }
+    setPins(prev => { const n = prev.map(p => p.id === id ? restoredPin : p); savePins(n); return n })
   }, [undoQueue])
 
   const hardDelete = useCallback((id: string) => {
@@ -57,7 +58,7 @@ export function usePins() {
 
   const restoreFromTrash = useCallback((id: string) => {
     setPins(prev => {
-      const n = prev.map(p => p.id === id ? { ...p, status: 'queued' as Status, deletedAt: undefined } : p)
+      const n = prev.map(p => p.id === id ? { ...p, status: 'queued' as Status, isDeleted: false, deletedAt: undefined } : p)
       savePins(n); return n
     })
   }, [])

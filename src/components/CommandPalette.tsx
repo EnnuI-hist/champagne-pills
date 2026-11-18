@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Plus, Palette, Bell, Dices, Trash2, ExternalLink, Play, Tag } from 'lucide-react'
+import { Search, Plus, Palette, Bell, Dices, Trash2, ExternalLink, Play, Tag, FileJson } from 'lucide-react'
 import type { Pin, QuickLink } from '../types'
 import { PlatformBadge } from './Badges'
 
@@ -15,6 +15,7 @@ interface CommandPaletteProps {
   onOpenPomodoro: () => void
   onOpenRoulette: () => void
   onOpenTrash: () => void
+  onOpenExport?: () => void
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -28,6 +29,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenPomodoro,
   onOpenRoulette,
   onOpenTrash,
+  onOpenExport,
 }) => {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -41,14 +43,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
   }, [open])
 
-  // Filter items
+  // Filter items: by title, channel, tags, notes text, and bookmark labels/timecodes
   const activePins = pins.filter((p) => p.status !== 'deleted')
   const matchedPins = query.trim()
-    ? activePins.filter((p) => {
-        const q = query.toLowerCase()
-        const text = `${p.title} ${p.channelName || ''} ${(p.tags || []).join(' ')} ${p.note || ''}`.toLowerCase()
-        return text.includes(q)
-      }).slice(0, 6)
+    ? activePins
+        .filter((p) => {
+          const q = query.toLowerCase()
+          const bookmarkText = (p.timecodeBookmarks || [])
+            .map((b) => `${b.time} ${b.label}`)
+            .join(' ')
+          const haystack = `${p.title} ${p.channelName || ''} ${(p.tags || []).join(' ')} ${
+            p.note || ''
+          } ${p.notes || ''} ${bookmarkText}`.toLowerCase()
+          return haystack.includes(q)
+        })
+        .slice(0, 6)
     : activePins.slice(0, 4)
 
   const matchedLinks = query.trim()
@@ -59,7 +68,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     {
       id: 'action-add',
       title: 'Создать новый закреп',
-      sub: 'Вставить ссылку на видео, лекцию или аниме',
+      sub: 'Вставить ссылку на видео, лекцию или аниме (N)',
       icon: <Plus size={16} className="text-[#f3e5ab]" />,
       run: () => {
         onClose()
@@ -67,19 +76,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
     },
     {
-      id: 'action-pomodoro',
-      title: 'Таймер фокуса и шум',
-      sub: '45/10, 25/5, Brown noise и дождь',
-      icon: <Bell size={16} className="text-[#ff2a85]" />,
+      id: 'action-roulette',
+      title: 'Рулетка на вечер',
+      sub: 'Случайный выбор карточки из статуса «В очереди»',
+      icon: <Dices size={16} className="text-[#ff2a85]" />,
       run: () => {
         onClose()
-        onOpenPomodoro()
+        onOpenRoulette()
       },
     },
     {
       id: 'action-theme',
-      title: 'Сменить атмосферу и неон',
-      sub: 'Champagne, Cyber, Emerald, Crimson или свой фон',
+      title: 'Сменить атмосферу и тему',
+      sub: 'Пресеты: Champagne, Cyber, Emerald, Crimson или свой фон',
       icon: <Palette size={16} className="text-purple-400" />,
       run: () => {
         onClose()
@@ -87,19 +96,29 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
     },
     {
-      id: 'action-roulette',
-      title: 'Запустить медиа-рулетку',
-      sub: 'Случайный выбор из очереди просмотра',
-      icon: <Dices size={16} className="text-pink-400" />,
+      id: 'action-pomodoro',
+      title: 'Фокус-модуль & Web Audio шум',
+      sub: '45/10, 25/5, Brown noise и ночной дождь',
+      icon: <Bell size={16} className="text-amber-400" />,
       run: () => {
         onClose()
-        onOpenRoulette()
+        onOpenPomodoro()
+      },
+    },
+    {
+      id: 'action-export',
+      title: 'Резервная копия & Экспорт базы',
+      sub: 'Скачать .json файл или скопировать текстовую строку',
+      icon: <FileJson size={16} className="text-[#f3e5ab]" />,
+      run: () => {
+        onClose()
+        onOpenExport?.()
       },
     },
     {
       id: 'action-trash',
       title: 'Открыть корзину',
-      sub: 'Просмотр и восстановление удаленных закрепов',
+      sub: 'Просмотр и очистка удаленных закрепов',
       icon: <Trash2 size={16} className="text-red-400" />,
       run: () => {
         onClose()
@@ -119,7 +138,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       setSelectedIndex((prev) => (prev - 1 + totalItemsCount) % Math.max(1, totalItemsCount))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      // execute selected
       if (selectedIndex < matchedPins.length) {
         onSelectPin(matchedPins[selectedIndex])
         onClose()
@@ -153,7 +171,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-            className="glass-modal w-full max-w-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col"
+            className="glass-modal w-full max-w-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col bg-[#0b0d13]/95"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={handleKeyDown}
           >
@@ -168,11 +186,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                   setQuery(e.target.value)
                   setSelectedIndex(0)
                 }}
-                placeholder="Ищи закрепы, теги, ссылки или команды..."
+                placeholder="Поиск по названию, тегам, таймкодам или конспекту..."
                 className="w-full bg-transparent text-sm text-white placeholder:text-white/30 focus:outline-none"
               />
               <span
-                className="text-[10px] text-white/30 border border-white/10 px-1.5 py-0.5 rounded shrink-0"
+                className="text-[10px] text-white/30 border border-white/10 px-1.5 py-0.5 rounded shrink-0 mono"
                 style={{ fontFamily: "'JetBrains Mono', monospace" }}
               >
                 ESC
@@ -269,7 +287,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     className="text-[10px] text-white/30 uppercase tracking-wider px-3 mb-1.5"
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
-                    Действия
+                    Быстрые действия
                   </div>
                   <div className="space-y-1">
                     {actions.map((act, i) => {

@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Download, Upload, Copy, Check, FileJson, AlertCircle } from 'lucide-react'
+import { X, Download, Upload, Copy, Check, FileJson, AlertCircle, ClipboardPaste } from 'lucide-react'
 import type { Pin, QuickLink } from '../types'
 import { exportToJson, exportToClipboard, importFromJson } from '../utils/storage'
+import { uid } from '../utils'
 
 interface ExportModalProps {
   open: boolean
@@ -22,6 +23,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [copied, setCopied] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+  const [showPasteBox, setShowPasteBox] = useState(false)
+  const [pastedJson, setPastedJson] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleCopy = () => {
@@ -52,6 +55,38 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     }
   }
 
+  // Parse and import string directly
+  const handleImportText = (text: string) => {
+    try {
+      setImportError(null)
+      const data = JSON.parse(text.trim())
+      const importedPins = (data.pins ?? data) as Pin[]
+      if (!Array.isArray(importedPins)) throw new Error('Invalid format')
+
+      onImportSuccess({
+        pins: importedPins.map((p) => ({ ...p, id: p.id || uid() })),
+        quickLinks: data.quickLinks,
+      })
+      onClose()
+    } catch {
+      setImportError('Некорректный JSON. Убедитесь, что скопирована полная строка базы.')
+    }
+  }
+
+  const handleClipboardPasteImport = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text) {
+        handleImportText(text)
+      } else {
+        setShowPasteBox(true)
+      }
+    } catch {
+      // If browser clipboard permission is blocked, show manual textarea
+      setShowPasteBox(true)
+    }
+  }
+
   return (
     <AnimatePresence>
       {open && (
@@ -68,7 +103,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="glass-modal w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden flex flex-col shadow-2xl"
+            className="glass-modal w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden flex flex-col shadow-2xl bg-[#0b0d13]/95"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -142,41 +177,75 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-white">
-                        {copied ? 'Скопировано!' : 'Копировать JSON'}
+                        {copied ? 'Скопировано!' : 'Копировать строку'}
                       </p>
-                      <p className="text-[11px] text-white/40 mt-0.5">В буфер обмена для мессенджера</p>
+                      <p className="text-[11px] text-white/40 mt-0.5">Текстовая копия для мессенджера</p>
                     </div>
                   </button>
                 </div>
               </div>
 
               {/* Import section */}
-              <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <div className="space-y-3 pt-2 border-t border-white/[0.06]">
                 <label
                   className="text-[10px] text-white/40 uppercase tracking-wider block"
                   style={{ fontFamily: "'JetBrains Mono', monospace" }}
                 >
                   Импорт данных
                 </label>
-                <div
-                  onClick={() => fileRef.current?.click()}
-                  className="p-5 rounded-2xl border-2 border-dashed border-white/10 hover:border-white/20 hover:bg-white/[0.02] transition-all cursor-pointer text-center space-y-1"
-                >
-                  <Upload size={24} className="mx-auto text-white/30" />
-                  <p className="text-xs font-semibold text-white">
-                    {isImporting ? 'Импортирование...' : 'Загрузить JSON-файл'}
-                  </p>
-                  <p className="text-[11px] text-white/40">
-                    Нажмите для выбора сохраненного файла базы
-                  </p>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".json,application/json"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* File upload */}
+                  <div
+                    onClick={() => fileRef.current?.click()}
+                    className="p-4 rounded-xl border border-dashed border-white/10 hover:border-white/20 hover:bg-white/[0.02] transition-all cursor-pointer text-center space-y-1"
+                  >
+                    <Upload size={20} className="mx-auto text-white/40" />
+                    <p className="text-xs font-semibold text-white">
+                      {isImporting ? 'Чтение...' : 'Загрузить файл .json'}
+                    </p>
+                    <p className="text-[10px] text-white/30">С диска ПК или телефона</p>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                  </div>
+
+                  {/* Clipboard paste */}
+                  <button
+                    type="button"
+                    onClick={handleClipboardPasteImport}
+                    className="p-4 rounded-xl border border-white/10 hover:border-[#f3e5ab]/40 hover:bg-white/[0.02] transition-all text-center space-y-1 cursor-pointer flex flex-col items-center justify-center"
+                  >
+                    <ClipboardPaste size={20} className="text-[#f3e5ab]" />
+                    <p className="text-xs font-semibold text-white">Вставить из буфера</p>
+                    <p className="text-[10px] text-white/30">Импорт скопированной строки</p>
+                  </button>
                 </div>
+
+                {/* Manual paste box if needed */}
+                {showPasteBox && (
+                  <div className="space-y-2 pt-2">
+                    <textarea
+                      value={pastedJson}
+                      onChange={(e) => setPastedJson(e.target.value)}
+                      placeholder="Вставьте сюда JSON-текст базы закрепов..."
+                      rows={3}
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-2.5 text-xs text-white mono placeholder:text-white/20 focus:border-[#f3e5ab]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleImportText(pastedJson)}
+                      className="w-full py-2 rounded-xl btn-gold text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                    >
+                      <Check size={13} /> Применить и восстановить базу
+                    </button>
+                  </div>
+                )}
+
                 {importError && (
                   <div className="flex items-center gap-1.5 text-xs text-red-400 mt-2">
                     <AlertCircle size={14} />

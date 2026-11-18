@@ -433,6 +433,7 @@ export default function App() {
         onOpenPomodoro={() => setShowPomodoroModal(true)}
         onOpenRoulette={() => setShowRouletteModal(true)}
         onOpenTrash={() => setShowTrashModal(true)}
+        onOpenExport={() => setShowExportModal(true)}
       />
 
       {/* Trash Modal */}
