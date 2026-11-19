@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
   Play,
@@ -10,16 +10,17 @@ import {
   Tv,
   BookOpen,
   FileText,
-  Star,
   ExternalLink,
   ChevronUp,
   ChevronDown,
-  Edit2,
   ListVideo,
   CheckSquare,
   Square,
+  MoreHorizontal,
+  Archive,
+  RotateCcw,
 } from 'lucide-react'
-import type { Pin, PlaylistPart } from '../types'
+import type { Pin, PlaylistPart, Status } from '../types'
 import { buildYouTubeTimecodeUrl } from '../utils'
 import { PlatformBadge, StatusBadge } from './Badges'
 import { PinPoster } from './PinPoster'
@@ -29,6 +30,7 @@ interface PinCardProps {
   onPlay: (pin: Pin) => void
   onTogglePin: (id: string) => void
   onDelete: (id: string) => void
+  onUpdateStatus?: (id: string, status: Status) => void
   onUpdateEpisode?: (id: string, newEp: number) => void
   onUpdateTimecode?: (id: string, newTimecode: string) => void
   onUpdateRating?: (id: string, newRating: number) => void
@@ -45,6 +47,7 @@ export const PinCard: React.FC<PinCardProps> = ({
   onPlay,
   onTogglePin,
   onDelete,
+  onUpdateStatus,
   onUpdateEpisode,
   onUpdateTimecode,
   onUpdateRating,
@@ -56,9 +59,11 @@ export const PinCard: React.FC<PinCardProps> = ({
   canMoveDown = true,
 }) => {
   const [copied, setCopied] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [isEditingTimecode, setIsEditingTimecode] = useState(false)
   const [tcInput, setTcInput] = useState(pin.timecode || '')
   const [showParts, setShowParts] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const isEpisodic = pin.contentType === 'anime' || pin.contentType === 'series'
   const currentEp = pin.currentEpisode ?? pin.currentEp ?? 1
@@ -72,8 +77,20 @@ export const PinCard: React.FC<PinCardProps> = ({
   const completedPartsCount = pin.parts?.filter((p) => p.isCompleted).length || 0
   const totalPartsCount = pin.parts?.length || 0
 
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!showMenu) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    document.addEventListener('pointerdown', handleClickOutside)
+    return () => document.removeEventListener('pointerdown', handleClickOutside)
+  }, [showMenu])
+
+  const handleCopy = (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     const urlToCopy =
       pin.platform === 'youtube' && pin.timecode
         ? buildYouTubeTimecodeUrl(pin.url, pin.timecode)
@@ -98,8 +115,7 @@ export const PinCard: React.FC<PinCardProps> = ({
     }
   }
 
-  const handleRatingClick = (e: React.MouseEvent, star: number) => {
-    e.stopPropagation()
+  const handleRatingClick = (star: number) => {
     if (onUpdateRating) {
       const next = pin.rating === star ? 0 : star
       onUpdateRating(pin.id, next)
@@ -111,6 +127,13 @@ export const PinCard: React.FC<PinCardProps> = ({
       ? buildYouTubeTimecodeUrl(pin.url, pin.timecode)
       : pin.url
 
+  // Button label
+  const primaryButtonLabel = pin.timecode
+    ? `Смотреть с ${pin.timecode}`
+    : isEpisodic
+    ? `Серия ${currentEp}`
+    : 'Смотреть'
+
   return (
     <motion.div
       layout
@@ -119,11 +142,15 @@ export const PinCard: React.FC<PinCardProps> = ({
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
       onClick={() => onPlay(pin)}
-      className="glass-card rounded-2xl overflow-hidden group cursor-pointer transition-all duration-300 hover:border-white/20 hover:scale-[1.01] hover:shadow-2xl flex flex-col justify-between relative"
+      className={`glass-card rounded-2xl overflow-hidden group cursor-pointer transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl flex flex-col justify-between relative h-full border ${
+        pin.isPinned
+          ? 'border-[#f3e5ab]/60 shadow-[0_0_20px_rgba(243,229,171,0.16)] ring-1 ring-[#f3e5ab]/30'
+          : 'border-white/10 hover:border-white/20'
+      }`}
     >
-      <div>
-        {/* Thumbnail Banner with Fallback (No broken browser images!) */}
-        <div className="relative aspect-video w-full overflow-hidden bg-black/60">
+      <div className="flex flex-col flex-1">
+        {/* Thumbnail Banner with Fallback (No broken browser images, no single letters!) */}
+        <div className="relative aspect-video w-full overflow-hidden bg-black/60 shrink-0">
           <PinPoster pin={pin} />
 
           {/* Top Badges & Controls */}
@@ -139,7 +166,7 @@ export const PinCard: React.FC<PinCardProps> = ({
                     e.stopPropagation()
                     onMoveUp(pin.id)
                   }}
-                  className="p-1 rounded-lg bg-black/50 hover:bg-black/80 text-white/60 hover:text-white transition-colors cursor-pointer"
+                  className="p-1 rounded-lg bg-black/60 hover:bg-black/85 text-white/60 hover:text-white transition-colors cursor-pointer border border-white/5"
                   title="Переместить выше"
                 >
                   <ChevronUp size={13} />
@@ -152,7 +179,7 @@ export const PinCard: React.FC<PinCardProps> = ({
                     e.stopPropagation()
                     onMoveDown(pin.id)
                   }}
-                  className="p-1 rounded-lg bg-black/50 hover:bg-black/80 text-white/60 hover:text-white transition-colors cursor-pointer"
+                  className="p-1 rounded-lg bg-black/60 hover:bg-black/85 text-white/60 hover:text-white transition-colors cursor-pointer border border-white/5"
                   title="Переместить ниже"
                 >
                   <ChevronDown size={13} />
@@ -166,12 +193,12 @@ export const PinCard: React.FC<PinCardProps> = ({
                   e.stopPropagation()
                   onTogglePin(pin.id)
                 }}
-                className={`p-1.5 rounded-lg backdrop-blur-md transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-lg backdrop-blur-md transition-all cursor-pointer ${
                   pin.isPinned
                     ? 'bg-[#ff2a85] text-white shadow-md'
-                    : 'bg-black/50 text-white/60 hover:text-white hover:bg-black/70'
+                    : 'bg-black/60 text-white/60 hover:text-white hover:bg-black/80 border border-white/5'
                 }`}
-                title={pin.isPinned ? 'Открепить из фокуса' : 'Закрепить в фокус'}
+                title={pin.isPinned ? 'Открепить из топа' : 'Закрепить в топ'}
               >
                 <PinIcon size={13} className={pin.isPinned ? 'fill-current' : ''} />
               </button>
@@ -179,7 +206,7 @@ export const PinCard: React.FC<PinCardProps> = ({
           </div>
 
           {/* Quick Play hover overlay */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 backdrop-blur-[2px]">
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/35 backdrop-blur-[2px]">
             <div className="p-3.5 rounded-2xl btn-gold shadow-2xl scale-90 group-hover:scale-100 transition-transform">
               <Play size={20} className="fill-current text-[#0b0d11]" />
             </div>
@@ -187,10 +214,10 @@ export const PinCard: React.FC<PinCardProps> = ({
 
           {/* Bottom Thumbnail Info: Stop Timecode & Status */}
           <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between z-10">
-            {/* Inline timecode stop / quick open */}
+            {/* Inline timecode stop / editor */}
             {isEditingTimecode ? (
               <div
-                className="flex items-center gap-1 bg-black/80 p-0.5 px-1.5 rounded-lg border border-[#f3e5ab]/50"
+                className="flex items-center gap-1 bg-black/90 p-1 px-2 rounded-lg border border-[#f3e5ab]/60 shadow-lg"
                 onClick={(e) => e.stopPropagation()}
               >
                 <input
@@ -201,7 +228,7 @@ export const PinCard: React.FC<PinCardProps> = ({
                     if (e.key === 'Enter') handleSaveTimecode()
                     if (e.key === 'Escape') setIsEditingTimecode(false)
                   }}
-                  placeholder="01:15:30"
+                  placeholder="00:15:30"
                   className="w-16 bg-transparent text-[11px] text-[#f3e5ab] mono text-center focus:outline-none"
                   autoFocus
                 />
@@ -209,51 +236,22 @@ export const PinCard: React.FC<PinCardProps> = ({
                   type="button"
                   onClick={handleSaveTimecode}
                   className="text-green-400 p-0.5 hover:scale-110 cursor-pointer"
+                  title="Сохранить"
                 >
-                  <Check size={11} />
+                  <Check size={12} />
                 </button>
               </div>
             ) : pin.timecode ? (
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setIsEditingTimecode(true)
-                  }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[11px] text-[#f3e5ab] hover:border-[#f3e5ab]/50 transition-colors mono group/tc"
-                  title="Нажмите для быстрого изменения таймкода"
+                <span
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/10 text-[11px] text-[#f3e5ab] mono"
+                  title="Сохраненный таймкод"
                 >
                   <Clock size={11} className="text-[#f3e5ab]" />
                   <span>{pin.timecode}</span>
-                  <Edit2 size={9} className="opacity-0 group-hover/tc:opacity-100 transition-opacity" />
-                </button>
-
-                <a
-                  href={directExternalLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="p-1 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[#f3e5ab]/70 hover:text-[#f3e5ab] hover:border-[#f3e5ab]/50 transition-colors"
-                  title="Открыть с таймкода в браузере"
-                >
-                  <ExternalLink size={11} />
-                </a>
+                </span>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setIsEditingTimecode(true)
-                }}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] text-white/40 hover:text-[#f3e5ab] mono transition-colors"
-                title="Задать таймкод остановки"
-              >
-                <Clock size={10} />
-                <span>+таймкод</span>
-              </button>
-            )}
+            ) : <span />}
 
             <StatusBadge status={pin.status} />
           </div>
@@ -270,18 +268,25 @@ export const PinCard: React.FC<PinCardProps> = ({
         </div>
 
         {/* Card Body */}
-        <div className="p-4 space-y-3">
-          {/* Title & Author */}
+        <div className="p-4 space-y-3 flex-1 flex flex-col">
+          {/* Title & Author & Rating Badge */}
           <div>
-            <h4 className="text-sm font-semibold text-white/95 leading-snug line-clamp-2 group-hover:text-[#f3e5ab] transition-colors">
-              {pin.title}
-            </h4>
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="text-sm font-semibold text-white/95 leading-snug line-clamp-2 group-hover:text-[#f3e5ab] transition-colors flex-1">
+                {pin.title}
+              </h4>
+              {pin.rating ? (
+                <span className="shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#f3e5ab]/10 border border-[#f3e5ab]/30 text-[10px] text-[#f3e5ab] font-bold mono">
+                  ★ {pin.rating}
+                </span>
+              ) : null}
+            </div>
             {pin.channelName && (
               <p className="text-xs text-white/40 mt-1 truncate">{pin.channelName}</p>
             )}
           </div>
 
-          {/* Multi-part Playlist Support (e.g. Сага «Сумерки»: Фильм 1, 2, 3...) */}
+          {/* Multi-part Playlist Support */}
           {hasParts && (
             <div
               className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2"
@@ -430,7 +435,7 @@ export const PinCard: React.FC<PinCardProps> = ({
 
           {/* Notes preview */}
           {(pin.note || pin.notes) && (
-            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 text-[11px] text-white/50 line-clamp-2 leading-relaxed flex items-start gap-1.5">
+            <div className="p-2 rounded-xl bg-white/[0.02] border border-white/5 text-[11px] text-white/50 line-clamp-2 leading-relaxed flex items-start gap-1.5">
               <FileText size={12} className="shrink-0 mt-0.5 text-white/30" />
               <span>{pin.note || pin.notes}</span>
             </div>
@@ -438,7 +443,7 @@ export const PinCard: React.FC<PinCardProps> = ({
 
           {/* Tags */}
           {pin.tags && pin.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 mt-auto">
               {pin.tags.map((tag) => (
                 <span
                   key={tag}
@@ -452,65 +457,151 @@ export const PinCard: React.FC<PinCardProps> = ({
         </div>
       </div>
 
-      {/* Card Footer Actions: Rating & Quick Buttons */}
+      {/* ── Minimalist Clean Footer: Single Primary Action + Context Menu (•••) ── */}
       <div
-        className="p-3 px-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-white/40 shrink-0"
+        className="p-3 px-4 border-t border-white/[0.06] flex items-center gap-2 relative shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Rating stars (1-10) clickable */}
-        <div className="flex items-center gap-0.5" title="Оценить тайтл (1-10)">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
-            <button
-              key={star}
-              type="button"
-              onClick={(e) => handleRatingClick(e, star)}
-              className="p-0.5 text-white/20 hover:text-[#f3e5ab] transition-colors"
-              style={{
-                color: pin.rating && pin.rating >= star ? '#f3e5ab' : undefined,
-              }}
-            >
-              <Star
-                size={11}
-                fill={pin.rating && pin.rating >= star ? 'currentColor' : 'none'}
-              />
-            </button>
-          ))}
-          {pin.rating ? (
-            <span className="ml-1 text-[11px] text-[#f3e5ab] font-bold mono">
-              {pin.rating}
-            </span>
-          ) : null}
-        </div>
+        {/* Single Primary Action Button */}
+        <button
+          type="button"
+          onClick={() => onPlay(pin)}
+          className="flex-1 py-2 px-3.5 rounded-xl btn-gold text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer"
+        >
+          <Play size={13} className="fill-current text-[#0b0d11]" />
+          <span className="truncate">{primaryButtonLabel}</span>
+        </button>
 
-        {/* Action icons */}
-        <div className="flex items-center gap-1">
+        {/* Actions Menu Trigger (•••) */}
+        <div className="relative" ref={menuRef}>
           <button
             type="button"
-            onClick={handleCopy}
-            className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-            title="Скопировать ссылку с таймкодом"
+            onClick={() => setShowMenu((prev) => !prev)}
+            className={`p-2 rounded-xl transition-all cursor-pointer border ${
+              showMenu
+                ? 'bg-white/20 text-white border-white/30'
+                : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border-white/5'
+            }`}
+            title="Действия"
           >
-            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+            <MoreHorizontal size={16} />
           </button>
 
-          <a
-            href={directExternalLink}
-            target="_blank"
-            rel="noreferrer"
-            className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors"
-            title="Открыть в новой вкладке"
-          >
-            <ExternalLink size={14} />
-          </a>
+          {/* Context Dropdown Popover */}
+          {showMenu && (
+            <div className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl bg-[#0f1017]/95 backdrop-blur-xl border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.85)] p-1.5 z-50 text-xs text-white/80 animate-in fade-in zoom-in-95 duration-150 space-y-0.5">
+              {/* Change Timecode */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false)
+                  setIsEditingTimecode(true)
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 hover:text-[#f3e5ab] text-left transition-colors cursor-pointer"
+              >
+                <Clock size={13} className="text-[#f3e5ab]" />
+                <span>{pin.timecode ? 'Изменить таймкод' : 'Задать таймкод'}</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => onDelete(pin.id)}
-            className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-            title="Переместить в корзину"
-          >
-            <Trash2 size={14} />
-          </button>
+              {/* Copy link */}
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 hover:text-white text-left transition-colors cursor-pointer"
+              >
+                {copied ? (
+                  <>
+                    <Check size={13} className="text-green-400" />
+                    <span className="text-green-400 font-medium">Ссылка скопирована!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} />
+                    <span>Скопировать ссылку</span>
+                  </>
+                )}
+              </button>
+
+              {/* Open in browser */}
+              <a
+                href={directExternalLink}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setShowMenu(false)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 hover:text-white text-left transition-colors"
+              >
+                <ExternalLink size={13} />
+                <span>Открыть в браузере</span>
+              </a>
+
+              {/* Status / Archive */}
+              {onUpdateStatus && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextStatus = pin.status === 'archived' ? 'queued' : 'archived'
+                    onUpdateStatus(pin.id, nextStatus)
+                    setShowMenu(false)
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 hover:text-white text-left transition-colors cursor-pointer"
+                >
+                  {pin.status === 'archived' ? (
+                    <>
+                      <RotateCcw size={13} className="text-green-400" />
+                      <span>Вернуть из архива</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive size={13} className="text-amber-400" />
+                      <span>Перенести в архив</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Rating (1-10) neatly inside menu */}
+              {onUpdateRating && (
+                <div className="px-2.5 py-1.5 border-t border-b border-white/[0.08] my-1">
+                  <div className="flex items-center justify-between text-[10px] text-white/40 mb-1">
+                    <span>Оценка тайтла</span>
+                    {pin.rating ? (
+                      <span className="text-[#f3e5ab] font-bold">★ {pin.rating}/10</span>
+                    ) : (
+                      <span>Не оценено</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-0.5">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => handleRatingClick(star)}
+                        className={`text-[10px] font-bold p-1 rounded hover:bg-white/10 transition-colors cursor-pointer ${
+                          pin.rating && pin.rating >= star ? 'text-[#f3e5ab]' : 'text-white/25'
+                        }`}
+                        title={`${star} из 10`}
+                      >
+                        {star}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Delete */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false)
+                  onDelete(pin.id)
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-red-500/20 text-red-400 text-left transition-colors cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Удалить</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

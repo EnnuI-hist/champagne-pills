@@ -19,6 +19,7 @@ interface PinGridProps {
   onPlayPin: (pin: Pin) => void
   onTogglePin: (id: string) => void
   onDeletePin: (id: string) => void
+  onUpdateStatus?: (id: string, status: import('../types').Status) => void
   onUpdateEpisode: (id: string, newEp: number) => void
   onUpdateTimecode: (id: string, newTc: string) => void
   onUpdateRating: (id: string, newRating: number) => void
@@ -51,6 +52,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
   onPlayPin,
   onTogglePin,
   onDeletePin,
+  onUpdateStatus,
   onUpdateEpisode,
   onUpdateTimecode,
   onUpdateRating,
@@ -238,6 +240,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
                 onPlay={onPlayPin}
                 onTogglePin={onTogglePin}
                 onDelete={onDeletePin}
+                onUpdateStatus={onUpdateStatus}
                 onUpdateEpisode={onUpdateEpisode}
                 onUpdateTimecode={onUpdateTimecode}
                 onUpdateRating={onUpdateRating}

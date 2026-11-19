@@ -11,7 +11,6 @@ import { TrashModal } from './components/TrashModal'
 import { ExportModal } from './components/ExportModal'
 import { CollectionModal } from './components/CollectionModal'
 import { ToastUndo } from './components/ToastUndo'
-import { HeroSection } from './components/HeroCard'
 import { PinGrid } from './components/PinGrid'
 
 import { useTheme } from './hooks/useTheme'
@@ -29,6 +28,7 @@ import type {
   Pin,
   QuickLink,
   Category,
+  Status,
   StatusFilter,
   Collection,
   PlaylistPart,
@@ -129,24 +129,21 @@ export default function App() {
     selectedTag,
   )
 
-  // Focus Hero: Up to 2 pinned cards (or watching cards if none are explicitly pinned)
-  const heroPins = useMemo(() => {
-    // Hide hero if search query or tag filter is active
-    if (search.trim() || selectedTag) {
-      return []
-    }
-    const pinned = allActivePins.filter((p) => p.isPinned)
-    if (pinned.length > 0) return pinned.slice(0, 2)
-    const watching = allActivePins.filter((p) => p.status === 'watching')
-    return watching.slice(0, 2)
-  }, [allActivePins, search, selectedTag])
-
-  // Remaining pins (exclude hero if displayed)
+  // Filtered pins with pinned cards sorted to the top
   const displayPins = useMemo(() => {
-    if (heroPins.length === 0) return filtered
-    const heroIds = new Set(heroPins.map((p) => p.id))
-    return filtered.filter((p) => !heroIds.has(p.id))
-  }, [filtered, heroPins])
+    return [...filtered].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1
+      if (!a.isPinned && b.isPinned) return 1
+      return 0
+    })
+  }, [filtered])
+
+  const handleUpdateStatus = (id: string, newStatus: Status) => {
+    const target = pins.find((p) => p.id === id)
+    if (target) {
+      updatePin({ ...target, status: newStatus })
+    }
+  }
 
   // Collection Handlers
   const handleSaveCollection = (col: Collection) => {
@@ -378,13 +375,6 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {/* Hero Section ("Сейчас в фокусе" - 1-2 главных закрепленных карточки) */}
-          <HeroSection
-            pins={heroPins}
-            onPlay={(p) => setActivePlayerPin(p)}
-            onTogglePin={handleTogglePin}
-          />
-
           {/* Dynamic Pin Grid & Navigation */}
           <PinGrid
             pins={displayPins}
@@ -407,6 +397,7 @@ export default function App() {
             onPlayPin={(p) => setActivePlayerPin(p)}
             onTogglePin={handleTogglePin}
             onDeletePin={softDelete}
+            onUpdateStatus={handleUpdateStatus}
             onUpdateEpisode={handleUpdateEpisode}
             onUpdateTimecode={handleUpdateTimecode}
             onUpdateRating={handleUpdateRating}

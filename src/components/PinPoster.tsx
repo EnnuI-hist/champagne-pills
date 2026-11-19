@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import type { Pin, Platform } from '../types'
 import { Tv, Film, Video, Globe, Play, Sparkles } from 'lucide-react'
+import { extractYouTubeId } from '../utils'
 
 interface PinPosterProps {
   pin: Pin
@@ -10,12 +11,12 @@ interface PinPosterProps {
 }
 
 const PLATFORM_ICONS: Record<Platform, React.ReactNode> = {
-  youtube: <Play size={15} className="text-red-400 fill-current" />,
-  rutube: <Video size={15} className="text-blue-400" />,
-  vk: <Globe size={15} className="text-sky-400" />,
-  vimeo: <Video size={15} className="text-teal-400" />,
-  anime: <Tv size={15} className="text-[#ff2a85]" />,
-  web: <Film size={15} className="text-[#f3e5ab]" />,
+  youtube: <Play size={13} className="text-red-400 fill-current" />,
+  rutube: <Video size={13} className="text-blue-400" />,
+  vk: <Globe size={13} className="text-sky-400" />,
+  vimeo: <Video size={13} className="text-teal-400" />,
+  anime: <Tv size={13} className="text-[#ff2a85]" />,
+  web: <Film size={13} className="text-[#f3e5ab]" />,
 }
 
 export const PinPoster: React.FC<PinPosterProps> = ({
@@ -25,9 +26,13 @@ export const PinPoster: React.FC<PinPosterProps> = ({
   imgClassName = 'w-full h-full object-cover transition-transform duration-500 group-hover:scale-105',
 }) => {
   const [hasError, setHasError] = useState(false)
-  const imageUrl = pin.customThumbnailUrl || pin.thumbnailUrl
 
-  // Reset error if image URL changes
+  // Auto-resolve YouTube preview if thumbnail not provided or is generic
+  const ytId = extractYouTubeId(pin.url)
+  const defaultYtThumb = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : ''
+  const imageUrl = pin.customThumbnailUrl || pin.thumbnailUrl || defaultYtThumb
+
+  // Reset error when target image URL changes
   useEffect(() => {
     setHasError(false)
   }, [imageUrl])
@@ -35,14 +40,10 @@ export const PinPoster: React.FC<PinPosterProps> = ({
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget
     // YouTube returns a 120x90 gray 3-dots image when a video is deleted or thumbnail is missing
-    if (img.naturalWidth === 120 && img.naturalHeight === 90 && pin.platform === 'youtube') {
+    if (img.naturalWidth === 120 && img.naturalHeight === 90 && (pin.platform === 'youtube' || Boolean(ytId))) {
       setHasError(true)
     }
   }
-
-  // Get initial letters or short title for stylized monogram
-  const shortTitle = pin.title ? pin.title.slice(0, 36) : 'champagne&pills'
-  const firstLetter = pin.title ? pin.title.trim()[0]?.toUpperCase() : '✦'
 
   if (imageUrl && !hasError) {
     return (
@@ -55,43 +56,59 @@ export const PinPoster: React.FC<PinPosterProps> = ({
           onLoad={handleImageLoad}
           onError={() => setHasError(true)}
         />
-        {/* Soft bottom gradient overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#060609] via-transparent to-black/30 opacity-70 pointer-events-none" />
+        {/* Soft bottom vignette overlay for text and badge contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 opacity-70 pointer-events-none" />
       </div>
     )
   }
 
-  // Stylish Dark Nocturnal Editorial Fallback (no broken browser images, no 3 dots!)
+  // Large blurred platform icon for the background artwork
+  const renderBackgroundArtwork = () => {
+    const iconClass = 'w-24 h-24 sm:w-28 sm:h-28 text-white/[0.06] blur-[1px] transform -rotate-12 select-none pointer-events-none'
+    if (pin.platform === 'youtube') return <Play className={`${iconClass} fill-current`} />
+    if (pin.platform === 'anime' || pin.contentType === 'anime') return <Tv className={iconClass} />
+    if (pin.platform === 'rutube' || pin.platform === 'vimeo') return <Video className={iconClass} />
+    if (pin.platform === 'vk') return <Globe className={iconClass} />
+    return <Film className={iconClass} />
+  }
+
+  // Stylish Nocturnal Editorial Fallback (no broken browser images, no solitary letters C/S!)
   return (
     <div
-      className={`relative w-full overflow-hidden bg-gradient-to-br from-[#181a28] via-[#0d0e17] to-[#06070a] ${aspectRatio} ${className} flex flex-col justify-between p-3.5 select-none border border-white/5`}
+      className={`relative w-full overflow-hidden bg-gradient-to-br from-[#181a28] via-[#0d0e17] to-[#06070a] ${aspectRatio} ${className} flex flex-col justify-between p-3 sm:p-3.5 select-none border border-white/5`}
     >
       {/* Decorative ambient glowing spots */}
       <div
-        className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl pointer-events-none"
+        className="absolute -top-10 -right-10 w-36 h-36 rounded-full opacity-25 blur-3xl pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, #ff2a85 0%, #f3e5ab 100%)',
+          background: 'radial-gradient(circle, #f3e5ab 0%, #ff2a85 100%)',
         }}
       />
       <div
-        className="absolute -bottom-8 -left-8 w-28 h-28 rounded-full opacity-15 blur-2xl pointer-events-none"
+        className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-20 blur-3xl pointer-events-none"
         style={{
           background: 'radial-gradient(circle, #a855f7 0%, #06b6d4 100%)',
         }}
       />
 
-      {/* Large artistic semi-transparent background monogram */}
-      <div
-        className="absolute right-2 bottom-0 text-7xl sm:text-8xl font-serif text-white/[0.06] select-none pointer-events-none font-bold leading-none"
-        style={{ fontFamily: "'Playfair Display', serif" }}
-      >
-        {firstLetter}
+      {/* Large artistic semi-transparent background platform icon */}
+      <div className="absolute right-1 bottom-1 sm:right-3 sm:bottom-2 z-0">
+        {renderBackgroundArtwork()}
       </div>
 
-      {/* Top watermark / platform */}
+      {/* Soft Vignette Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent pointer-events-none z-[5]" />
+
+      {/* Top watermark / platform badge */}
       <div className="relative z-10 flex items-center justify-between">
-        <div className="p-1 rounded-lg bg-white/5 border border-white/10 backdrop-blur-md">
-          {PLATFORM_ICONS[pin.platform] || <Sparkles size={14} className="text-[#f3e5ab]" />}
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/60 border border-white/10 backdrop-blur-md">
+          {PLATFORM_ICONS[pin.platform] || <Sparkles size={12} className="text-[#f3e5ab]" />}
+          <span
+            className="text-[9px] uppercase tracking-wider text-white/70 font-semibold"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            {pin.platform.toUpperCase()}
+          </span>
         </div>
         <span
           className="text-[9px] uppercase tracking-widest text-white/40 font-semibold"
@@ -109,26 +126,21 @@ export const PinPoster: React.FC<PinPosterProps> = ({
         </span>
       </div>
 
-      {/* Center Monogram / Typographic Art */}
-      <div className="relative z-10 my-auto py-1 text-center">
-        <div
-          className="text-3xl sm:text-4xl font-normal text-white/85 select-none"
-          style={{
-            fontFamily: "'Playfair Display', serif",
-            textShadow: '0 0 20px rgba(243, 229, 171, 0.25)',
-          }}
-        >
-          {firstLetter}
+      {/* Bottom-left corner: neat title + channel / timecode with soft vignette */}
+      <div className="relative z-10 mt-auto pt-3 text-left">
+        <h5 className="text-xs sm:text-sm font-semibold text-white/95 line-clamp-2 leading-snug drop-shadow-md">
+          {pin.title}
+        </h5>
+        <div className="flex items-center justify-between text-[10px] text-white/45 mt-1">
+          <span className="truncate max-w-[140px] text-[#f3e5ab]/80 font-medium">
+            {pin.channelName || 'champagne&pills'}
+          </span>
+          {pin.timecode && (
+            <span className="mono text-[#f3e5ab] bg-black/60 px-1.5 py-0.2 rounded border border-white/10">
+              {pin.timecode}
+            </span>
+          )}
         </div>
-        <p className="text-[11px] font-medium text-white/80 truncate max-w-[200px] mx-auto mt-0.5 px-2">
-          {shortTitle}
-        </p>
-      </div>
-
-      {/* Bottom brand watermark */}
-      <div className="relative z-10 flex items-center justify-between text-[9px] text-white/30 pt-1 border-t border-white/5">
-        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>champagne&amp;pills</span>
-        {pin.channelName && <span className="truncate max-w-[110px]">{pin.channelName}</span>}
       </div>
     </div>
   )
