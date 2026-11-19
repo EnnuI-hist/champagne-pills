@@ -18,8 +18,7 @@ import {
   Trash2,
   Layers,
 } from 'lucide-react'
-import type { Pin, Platform, ContentType, Category, HistoryPeriod, Status, Collection, PlaylistPart } from '../types'
-import { HISTORY_PERIOD_LABELS } from '../types'
+import type { Pin, Platform, ContentType, Category, Status, Collection, PlaylistPart } from '../types'
 import { detectPlatform, extractYouTubeId, uid, guessCategory, inferContentType } from '../utils'
 import { fetchVideoMeta, youtubeHqThumb } from '../utils/metadata'
 import { compressImageToWebp, saveBlob } from '../utils/db'
@@ -79,7 +78,6 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   const [contentType, setContentType] = useState<ContentType>('video')
   const [category, setCategory] = useState<Category>('video')
   const [status, setStatus] = useState<Status>('watching')
-  const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod | undefined>()
   const [tagsInput, setTagsInput] = useState('')
 
   // Episode / Lecture tracking
@@ -251,7 +249,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   }
 
   const isEpisodic = contentType === 'anime' || contentType === 'series'
-  const isLecture = contentType === 'lecture' || category === 'history'
+  const isLecture = contentType === 'lecture'
 
   // Submit Single Pin
   const handleSingleSubmit = (e: React.FormEvent) => {
@@ -297,7 +295,6 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
       rating: isEpisodic ? rating : undefined,
       lectureNumber: lectNum,
       totalLectures: lectTot,
-      historyPeriod: category === 'history' ? historyPeriod : undefined,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
       channelName: channelName.trim() || undefined,
       isPinned: status === 'watching',
@@ -748,39 +745,6 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                   </div>
                 </div>
 
-                {/* History Sub-period selector (when category is 'history') */}
-                {category === 'history' && (
-                  <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-                    <label
-                      className="text-[10px] text-[#f3e5ab] uppercase tracking-wider block"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                    >
-                      Подпериод истории (ЕГЭ / Олимп):
-                    </label>
-                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto scrollbar-none">
-                      {(Object.keys(HISTORY_PERIOD_LABELS) as HistoryPeriod[]).map((periodKey) => {
-                        const active = historyPeriod === periodKey
-                        return (
-                          <button
-                            key={periodKey}
-                            type="button"
-                            onClick={() =>
-                              setHistoryPeriod(active ? undefined : periodKey)
-                            }
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                              active
-                                ? 'bg-[rgba(243,229,171,0.15)] text-[#f3e5ab] border-[rgba(243,229,171,0.3)] shadow-sm'
-                                : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'
-                            }`}
-                          >
-                            {HISTORY_PERIOD_LABELS[periodKey]}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 {/* Episodic / Lecture Trackers */}
                 {isEpisodic ? (
                   <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
@@ -938,7 +902,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                       type="text"
                       value={tagsInput}
                       onChange={(e) => setTagsInput(e.target.value)}
-                      placeholder="#олимп, #лекция, #егэ"
+                      placeholder="#фильмы, #лекции, #топ"
                       className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-white/20 focus:border-[#f3e5ab]"
                     />
                   </div>

@@ -72,7 +72,7 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({
 
   const handleDelete = () => {
     if (!initialCollection || !onDelete) return
-    if (confirm(`Удалить раздел «${initialCollection.name}»? Закрепы останутся во вкладке «Все закрепы».`)) {
+    if (confirm(`Удалить раздел «${initialCollection.name}»? Закрепы останутся во вкладке «Все».`)) {
       onDelete(initialCollection.id)
       onClose()
     }
@@ -136,7 +136,7 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({
                     setName(e.target.value)
                     setError('')
                   }}
-                  placeholder="Например: СУМЕРКИ или История: Борисов"
+                  placeholder="Например: СУМЕРКИ, Лекции или Аниме"
                   className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-white/20 focus:border-[#f3e5ab] transition-all"
                   autoFocus
                 />
@@ -214,7 +214,7 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({
 
               {/* Actions */}
               <div className="flex items-center justify-between pt-4 border-t border-white/[0.08]">
-                {initialCollection && !initialCollection.isDefault && onDelete ? (
+                {initialCollection && onDelete ? (
                   <button
                     type="button"
                     onClick={handleDelete}

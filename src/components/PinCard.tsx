@@ -20,7 +20,6 @@ import {
   Square,
 } from 'lucide-react'
 import type { Pin, PlaylistPart } from '../types'
-import { HISTORY_PERIOD_LABELS } from '../types'
 import { buildYouTubeTimecodeUrl } from '../utils'
 import { PlatformBadge, StatusBadge } from './Badges'
 import { PinPoster } from './PinPoster'
@@ -281,14 +280,6 @@ export const PinCard: React.FC<PinCardProps> = ({
               <p className="text-xs text-white/40 mt-1 truncate">{pin.channelName}</p>
             )}
           </div>
-
-          {/* History Sub-period badge */}
-          {pin.historyPeriod && (
-            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[rgba(243,229,171,0.1)] border border-[rgba(243,229,171,0.2)] text-[11px] text-[#f3e5ab] font-medium">
-              <span>🏛️</span>
-              <span>{HISTORY_PERIOD_LABELS[pin.historyPeriod]}</span>
-            </div>
-          )}
 
           {/* Multi-part Playlist Support (e.g. Сага «Сумерки»: Фильм 1, 2, 3...) */}
           {hasParts && (

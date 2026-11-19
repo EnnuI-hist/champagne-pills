@@ -14,32 +14,7 @@ export interface Collection {
   isDefault?: boolean
 }
 
-export const DEFAULT_COLLECTIONS: Collection[] = [
-  { id: 'history', name: 'История (ЕГЭ / Олимп)', emoji: '🏛️', color: '#f3e5ab', isDefault: true },
-  { id: 'anime', name: 'Аниме и Сериалы', emoji: '🍿', color: '#ff2a85', isDefault: true },
-  { id: 'video', name: 'Видео / Эссе', emoji: '🎬', color: '#a855f7', isDefault: true },
-]
-
-export type HistoryPeriod =
-  | 'ancient'
-  | 'appanage'
-  | 'moscow'
-  | 'empire_early'
-  | 'empire_late'
-  | 'ussr_early'
-  | 'ussr_late'
-  | 'culture'
-
-export const HISTORY_PERIOD_LABELS: Record<HistoryPeriod, string> = {
-  ancient: 'Древняя Русь',
-  appanage: 'Удельный период',
-  moscow: 'Московское царство',
-  empire_early: 'Империя XVIII в.',
-  empire_late: 'Империя XIX – нач. XX в.',
-  ussr_early: 'СССР: Ленин / Сталин / ВОВ',
-  ussr_late: 'Поздний СССР',
-  culture: 'Культура и Историография',
-}
+export const DEFAULT_COLLECTIONS: Collection[] = []
 
 /* ───── Theme ───── */
 export type ThemePreset = 'champagne' | 'cyber' | 'emerald' | 'crimson'
@@ -95,7 +70,6 @@ export interface Pin {
   dubStudio?: string
   rating?: number // 1-10
   tags?: string[]
-  historyPeriod?: HistoryPeriod
   channelName?: string
   isPinned: boolean
   sortOrder?: number

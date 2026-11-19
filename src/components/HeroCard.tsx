@@ -1,7 +1,6 @@
 import React from 'react'
 import { Play, Clock, Sparkles, ExternalLink, Tv, BookOpen, PinOff } from 'lucide-react'
 import type { Pin } from '../types'
-import { HISTORY_PERIOD_LABELS } from '../types'
 import { buildYouTubeTimecodeUrl } from '../utils'
 import { PlatformBadge } from './Badges'
 import { PinPoster } from './PinPoster'
@@ -80,11 +79,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pins, onPlay, onToggle
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <PlatformBadge platform={pin.platform} />
-                    {pin.historyPeriod && (
-                      <span className="text-[11px] text-[#f3e5ab] bg-[rgba(243,229,171,0.1)] border border-[rgba(243,229,171,0.2)] px-2.5 py-0.5 rounded-full font-medium">
-                        🏛️ {HISTORY_PERIOD_LABELS[pin.historyPeriod]}
-                      </span>
-                    )}
                   </div>
 
                   <button

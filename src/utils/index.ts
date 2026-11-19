@@ -33,7 +33,7 @@ export function inferContentType(p: Platform): ContentType {
 
 export function guessCategory(url: string, ct: ContentType): Category {
   if (detectPlatform(url) === 'anime' || ct === 'anime' || ct === 'series' || ct === 'movie') return 'anime'
-  if (ct === 'lecture') return 'history'
+  if (ct === 'lecture') return 'lectures'
   return 'video'
 }
 
@@ -83,10 +83,7 @@ export const STATUS_LABELS: Record<string, string> = {
   completed: 'Просмотрено', archived: 'Архив', deleted: 'Удалено',
 }
 
-const CAT_LABELS: Record<Category, string> = {
-  all: 'Все закрепы', history: 'История', anime: 'Аниме и Сериалы', video: 'Видео / Эссе',
-}
-export const getCategoryLabel = (c: Category) => CAT_LABELS[c]
+export const getCategoryLabel = (c: Category) => (c === 'all' ? 'Все' : c)
 
 export function isUrl(s: string): boolean {
   try { new URL(s); return true } catch { return false }

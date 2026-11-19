@@ -32,7 +32,6 @@ import type {
   QuickLink,
   Category,
   StatusFilter,
-  HistoryPeriod,
   Collection,
   PlaylistPart,
 } from './types'
@@ -96,7 +95,6 @@ export default function App() {
   // Filters & State
   const [category, setCategory] = useState<Category>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [historyPeriodFilter, setHistoryPeriodFilter] = useState<HistoryPeriod | undefined>()
   const [search, setSearch] = useState('')
   const [selectedTag, setSelectedTag] = useState<string | undefined>()
 
@@ -130,7 +128,6 @@ export default function App() {
     category,
     search,
     statusFilter,
-    historyPeriodFilter,
     selectedTag,
   )
 
@@ -145,15 +142,15 @@ export default function App() {
 
   // Focus Hero: Up to 2 pinned cards (or watching cards if none are explicitly pinned)
   const heroPins = useMemo(() => {
-    // Hide hero if search query, sub-period or tag filter is active
-    if (search.trim() || historyPeriodFilter || selectedTag) {
+    // Hide hero if search query or tag filter is active
+    if (search.trim() || selectedTag) {
       return []
     }
     const pinned = allActivePins.filter((p) => p.isPinned)
     if (pinned.length > 0) return pinned.slice(0, 2)
     const watching = allActivePins.filter((p) => p.status === 'watching')
     return watching.slice(0, 2)
-  }, [allActivePins, search, historyPeriodFilter, selectedTag])
+  }, [allActivePins, search, selectedTag])
 
   // Remaining pins (exclude hero if displayed)
   const displayPins = useMemo(() => {
@@ -471,8 +468,6 @@ export default function App() {
             onQuickAdd={handleQuickAdd}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
-            historyPeriodFilter={historyPeriodFilter}
-            onHistoryPeriodFilterChange={setHistoryPeriodFilter}
             search={search}
             onSearchChange={setSearch}
             selectedTag={selectedTag}

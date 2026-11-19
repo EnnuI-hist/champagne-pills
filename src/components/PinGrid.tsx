@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Filter, BookOpen, Settings2, Zap, ArrowRight } from 'lucide-react'
-import type { Pin, Category, StatusFilter, HistoryPeriod, Collection, PlaylistPart } from '../types'
-import { HISTORY_PERIOD_LABELS } from '../types'
+import { Search, X, Plus, Filter, Settings2, Zap, ArrowRight } from 'lucide-react'
+import type { Pin, Category, StatusFilter, Collection, PlaylistPart } from '../types'
 import { PinCard } from './PinCard'
 
 interface PinGridProps {
@@ -16,8 +15,6 @@ interface PinGridProps {
   onQuickAdd: (url: string, category: string) => void
   statusFilter: StatusFilter
   onStatusFilterChange: (st: StatusFilter) => void
-  historyPeriodFilter?: HistoryPeriod
-  onHistoryPeriodFilterChange: (hp?: HistoryPeriod) => void
   search: string
   onSearchChange: (val: string) => void
   selectedTag?: string
@@ -54,8 +51,6 @@ export const PinGrid: React.FC<PinGridProps> = ({
   onQuickAdd,
   statusFilter,
   onStatusFilterChange,
-  historyPeriodFilter,
-  onHistoryPeriodFilterChange,
   search,
   onSearchChange,
   selectedTag,
@@ -95,7 +90,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
     e.preventDefault()
     if (!quickUrl.trim()) return
     setIsQuickAdding(true)
-    const targetCategory = category === 'all' ? (collections[0]?.id || 'video') : category
+    const targetCategory = category === 'all' ? (collections[0]?.id || 'default') : category
     onQuickAdd(quickUrl.trim(), targetCategory)
     setQuickUrl('')
     setTimeout(() => setIsQuickAdding(false), 1200)
@@ -109,19 +104,17 @@ export const PinGrid: React.FC<PinGridProps> = ({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         {/* Category Tabs Scrollable */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {/* "Все закрепы" Tab */}
+          {/* Base "Все" Tab */}
           <button
             type="button"
-            onClick={() => {
-              onCategoryChange('all')
-            }}
+            onClick={() => onCategoryChange('all')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               category === 'all'
                 ? 'btn-gold text-[#f3e5ab] shadow-md'
                 : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
             }`}
           >
-            <span>Все закрепы</span>
+            <span>Все</span>
             <span
               className="px-1.5 py-0.2 rounded-md text-[10px] mono font-bold"
               style={{
@@ -133,7 +126,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
             </span>
           </button>
 
-          {/* Dynamic Collections Tabs */}
+          {/* User Custom Collections Tabs */}
           {collections.map((col) => {
             const active = category === col.id
             const count = getCategoryCount(col.id)
@@ -148,12 +141,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
               >
                 <button
                   type="button"
-                  onClick={() => {
-                    onCategoryChange(col.id)
-                    if (col.id !== 'history') {
-                      onHistoryPeriodFilterChange(undefined)
-                    }
-                  }}
+                  onClick={() => onCategoryChange(col.id)}
                   className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold whitespace-nowrap cursor-pointer"
                 >
                   {col.emoji && <span>{col.emoji}</span>}
@@ -169,22 +157,20 @@ export const PinGrid: React.FC<PinGridProps> = ({
                   </span>
                 </button>
 
-                {/* Edit / Configure button for custom collection */}
-                {!col.isDefault && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onOpenEditCollection(col)
-                    }}
-                    className={`p-1.5 mr-1 rounded-lg transition-colors cursor-pointer ${
-                      active ? 'text-[#f3e5ab]/70 hover:text-[#f3e5ab]' : 'text-white/30 hover:text-white'
-                    }`}
-                    title="Настроить или удалить раздел"
-                  >
-                    <Settings2 size={12} />
-                  </button>
-                )}
+                {/* Edit / Configure / Delete button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenEditCollection(col)
+                  }}
+                  className={`p-1.5 mr-1 rounded-lg transition-colors cursor-pointer ${
+                    active ? 'text-[#f3e5ab]/70 hover:text-[#f3e5ab]' : 'text-white/30 hover:text-white'
+                  }`}
+                  title="Настроить или удалить раздел"
+                >
+                  <Settings2 size={12} />
+                </button>
               </div>
             )
           })}
@@ -194,7 +180,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
             type="button"
             onClick={onOpenAddCollection}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-[#f3e5ab]/90 hover:text-[#f3e5ab] border border-dashed border-[#f3e5ab]/30 hover:border-[#f3e5ab]/60 transition-all cursor-pointer"
-            title="Создать новый раздел / коллекцию"
+            title="Создать новый раздел / плейлист"
           >
             <Plus size={13} />
             <span>+ Новый раздел</span>
@@ -223,63 +209,6 @@ export const PinGrid: React.FC<PinGridProps> = ({
         </div>
       </div>
 
-      {/* History Sub-periods Chips (shown for history or all) */}
-      {(category === 'history' || category === 'all') && (
-        <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] text-[#f3e5ab]">
-            <span className="flex items-center gap-1.5 font-semibold">
-              <BookOpen size={13} />
-              <span>Эпохи истории России (ЕГЭ / Олимп):</span>
-            </span>
-            {historyPeriodFilter && (
-              <button
-                type="button"
-                onClick={() => onHistoryPeriodFilterChange(undefined)}
-                className="text-white/40 hover:text-white flex items-center gap-1 text-[10px] cursor-pointer"
-              >
-                <X size={11} /> Сбросить период
-              </button>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {/* "Все эпохи" chip */}
-            <button
-              type="button"
-              onClick={() => onHistoryPeriodFilterChange(undefined)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                !historyPeriodFilter
-                  ? 'bg-white/15 text-white border-white/20 font-semibold'
-                  : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'
-              }`}
-            >
-              Все эпохи
-            </button>
-
-            {/* Individual sub-periods */}
-            {(Object.keys(HISTORY_PERIOD_LABELS) as HistoryPeriod[]).map((periodKey) => {
-              const active = historyPeriodFilter === periodKey
-              return (
-                <button
-                  key={periodKey}
-                  type="button"
-                  onClick={() =>
-                    onHistoryPeriodFilterChange(active ? undefined : periodKey)
-                  }
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                    active
-                      ? 'bg-[rgba(243,229,171,0.18)] text-[#f3e5ab] border-[rgba(243,229,171,0.4)] shadow-sm font-semibold'
-                      : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'
-                  }`}
-                >
-                  {HISTORY_PERIOD_LABELS[periodKey]}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Inline Quick-Add Bar (Вставил ссылку -> нажал Enter -> закреп создался) */}
       <form
         onSubmit={handleQuickSubmit}
@@ -295,7 +224,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
           onChange={(e) => setQuickUrl(e.target.value)}
           placeholder={
             category === 'all'
-              ? 'Вставьте ссылку и нажмите Enter для мгновенного добавления...'
+              ? 'Вставьте ссылку и нажмите Enter для создания закрепа...'
               : `Вставьте ссылку в раздел «${activeCollection?.name || category}» и нажмите Enter...`
           }
           className="flex-1 bg-transparent border-0 text-xs text-white placeholder:text-white/30 focus:outline-none py-1.5"
@@ -385,7 +314,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
           </div>
           <h3 className="text-base font-semibold text-white/80">Ничего не найдено</h3>
           <p className="text-xs text-white/40 max-w-sm mx-auto">
-            {search || historyPeriodFilter || selectedTag || statusFilter !== 'all'
+            {search || selectedTag || statusFilter !== 'all'
               ? 'Попробуйте изменить поисковый запрос или сбросить активные фильтры'
               : 'В этом разделе пока нет закрепов. Добавьте первый закреп через кнопку или Ctrl+V!'}
           </p>

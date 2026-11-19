@@ -113,7 +113,7 @@ export function usePins() {
 /* ───── Filtered pins ───── */
 export function useFilteredPins(
   pins: Pin[], category: Category, search: string,
-  statusFilter: StatusFilter, historyPeriod?: string, tag?: string,
+  statusFilter: StatusFilter, tag?: string,
 ) {
   const active = pins.filter(p => p.status !== 'deleted')
   const filtered = active.filter(pin => {
@@ -125,7 +125,6 @@ export function useFilteredPins(
         return false
       }
     }
-    if (historyPeriod && pin.historyPeriod !== historyPeriod) return false
     if (tag && !(pin.tags || []).includes(tag)) return false
     if (search) {
       const q = search.toLowerCase()

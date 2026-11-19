@@ -23,9 +23,20 @@ function migrateLegacy(): Pin[] | null {
 export function loadPins(): Pin[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return (JSON.parse(raw) as AppData).pins || []
+    if (raw) {
+      const pins = ((JSON.parse(raw) as AppData).pins || []) as Pin[]
+      return pins.filter(
+        (p) => !/егэ|олимп|смутное|история россии с нуля/i.test(p.title) && p.category !== 'history'
+      )
+    }
     const legacy = migrateLegacy()
-    if (legacy) { savePins(legacy); return legacy }
+    if (legacy) {
+      const cleaned = legacy.filter(
+        (p) => !/егэ|олимп|смутное|история россии с нуля/i.test(p.title) && p.category !== 'history'
+      )
+      savePins(cleaned)
+      return cleaned
+    }
     return []
   } catch { return [] }
 }
@@ -40,7 +51,7 @@ export function loadQuickLinks(): QuickLink[] {
   try {
     const raw = localStorage.getItem(DOCK_KEY)
     if (raw) return JSON.parse(raw) as QuickLink[]
-    return [{ id: uid(), title: 'Тренажёр по истории', url: 'https://github.io', emoji: '🏛️' }]
+    return [{ id: uid(), title: 'YouTube', url: 'https://youtube.com', emoji: '▶️' }]
   } catch { return [] }
 }
 
@@ -54,7 +65,16 @@ export function loadCollections(): Collection[] {
     const raw = localStorage.getItem(COLLECTIONS_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Collection[]
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (c) =>
+            c.id !== 'history' &&
+            c.name !== 'История (ЕГЭ / Олимп)' &&
+            c.name !== 'Аниме и Сериалы' &&
+            c.name !== 'Видео / Эссе' &&
+            !/егэ|олимп|истори/i.test(c.name)
+        )
+      }
     }
     return DEFAULT_COLLECTIONS
   } catch {
@@ -118,47 +138,37 @@ export function getDemoData(): Pin[] {
   const now = new Date().toISOString()
   return [
     {
-      id: uid(), title: 'История России с Нуля | Полный курс лекций (ЕГЭ 2025)',
-      url: 'https://www.youtube.com/watch?v=8QIcMB-ERPM',
-      platform: 'youtube', contentType: 'lecture', category: 'history', status: 'watching',
-      thumbnailUrl: 'https://img.youtube.com/vi/8QIcMB-ERPM/hqdefault.jpg',
-      note: 'Лекция про Смутное время — ключевая! Михаил Романов 1613 год.',
-      notes: '## Смутное время\n- Борис Годунов\n- Лжедмитрий I & II\n- Минин и Пожарский 1612\n- Земский собор 1613 → Михаил Романов',
-      timecode: '1:14:30', lectureNumber: 12, totalLectures: 48,
-      timecodeBookmarks: [
-        { id: uid(), time: '00:18:30', label: 'Причины Смуты' },
-        { id: uid(), time: '00:52:10', label: 'Лжедмитрий I' },
-        { id: uid(), time: '01:14:30', label: 'Оценки историков' },
-      ],
-      historyPeriod: 'moscow', tags: ['#лекция', '#олимп'],
-      channelName: 'Кодификатор ЕГЭ',
-      isPinned: true, createdAt: now, updatedAt: now, isDemo: true,
-    },
-    {
-      id: uid(), title: 'Code Geass: Lelouch of the Rebellion',
+      id: uid(),
+      title: 'Code Geass: Lelouch of the Rebellion',
       url: 'https://jut.su/code-geass/',
-      platform: 'anime', contentType: 'anime', category: 'anime', status: 'watching',
-      thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/en/8/83/Code_Geass_Lelouch_of_the_Rebellion_R1.png',
-      note: 'Озвучка AniDUB. Финал — эпик!',
-      currentEpisode: 5, totalEpisodes: 25, dubStudio: 'AniDUB',
-      isPinned: true, createdAt: now, updatedAt: now, isDemo: true,
+      platform: 'anime',
+      contentType: 'anime',
+      category: 'anime',
+      status: 'watching',
+      note: 'Озвучка AniDUB. Финал — шедевр!',
+      currentEpisode: 5,
+      totalEpisodes: 25,
+      dubStudio: 'AniDUB',
+      isPinned: true,
+      createdAt: now,
+      updatedAt: now,
+      isDemo: true,
     },
     {
-      id: uid(), title: 'Sekiro — видеоэссе о самурайском пути',
+      id: uid(),
+      title: 'Sekiro — видеоэссе о самурайском пути',
       url: 'https://www.youtube.com/watch?v=J2DaIWy_mPQ',
-      platform: 'youtube', contentType: 'video', category: 'video', status: 'queued',
+      platform: 'youtube',
+      contentType: 'video',
+      category: 'video',
+      status: 'queued',
       thumbnailUrl: 'https://img.youtube.com/vi/J2DaIWy_mPQ/hqdefault.jpg',
-      note: 'Рекомендация из твиттера.',
+      note: 'Рекомендация для вечернего просмотра.',
       channelName: 'Гейм-критик',
-      isPinned: false, createdAt: now, updatedAt: now, isDemo: true,
-    },
-    {
-      id: uid(), title: 'Первая мировая война — причины и итоги',
-      url: 'https://rutube.ru/video/example123/',
-      platform: 'rutube', contentType: 'lecture', category: 'history', status: 'queued',
-      note: 'Пересмотреть перед олимпиадой.', historyPeriod: 'empire_late',
-      lectureNumber: 3, totalLectures: 10, tags: ['#олимп'],
-      isPinned: false, createdAt: now, updatedAt: now, isDemo: true,
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+      isDemo: true,
     },
   ]
 }
