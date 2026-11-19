@@ -30,6 +30,8 @@ interface AddPinModalProps {
   open: boolean
   onClose: () => void
   onAdd: (pin: Pin) => void
+  onUpdate?: (pin: Pin) => void
+  editingPin?: Pin | null
   onAddBatch?: (pins: Pin[]) => void
   initialUrl?: string
   collections: Collection[]
@@ -63,6 +65,8 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   open,
   onClose,
   onAdd,
+  onUpdate,
+  editingPin,
   onAddBatch,
   initialUrl = '',
   collections,
@@ -79,6 +83,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   const [category, setCategory] = useState<Category>('video')
   const [status, setStatus] = useState<Status>('watching')
   const [tagsInput, setTagsInput] = useState('')
+  const [note, setNote] = useState('')
 
   // Episode / Lecture tracking
   const [currentEp, setCurrentEp] = useState('1')
@@ -116,19 +121,48 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
   const platform: Platform = url ? detectPlatform(url) : 'web'
 
-  // Initialize or handle initialUrl change
+  // Initialize or handle editingPin / initialUrl change
   useEffect(() => {
     if (open) {
-      const defaultCat = activeCategory && activeCategory !== 'all' ? activeCategory : collections[0]?.id || 'video'
-      setCategory(defaultCat)
-      setBatchCategory(defaultCat)
-      setPlaylistCategory(defaultCat)
+      if (editingPin) {
+        setMode('single')
+        setUrl(editingPin.url)
+        setTitle(editingPin.title)
+        setChannelName(editingPin.channelName || '')
+        setContentType(editingPin.contentType)
+        setCategory(editingPin.category)
+        setStatus(editingPin.status)
+        setTimecode(editingPin.timecode || '')
+        setCurrentEp(String(editingPin.currentEpisode ?? editingPin.currentEp ?? 1))
+        setTotalEp(
+          editingPin.totalEpisodes || editingPin.totalEp
+            ? String(editingPin.totalEpisodes || editingPin.totalEp)
+            : '',
+        )
+        setDubStudio(editingPin.dubStudio || '')
+        setRating(editingPin.rating)
+        setLectureNum(editingPin.lectureNumber ? String(editingPin.lectureNumber) : '')
+        setTotalLectures(editingPin.totalLectures ? String(editingPin.totalLectures) : '')
+        setTagsInput((editingPin.tags || []).join(', '))
+        setNote(editingPin.note || editingPin.notes || '')
+        setAutoThumbUrl(editingPin.thumbnailUrl || null)
+        setCoverPreview(editingPin.customThumbnailUrl || null)
+        setThumbDbKey(editingPin.thumbnailDbKey)
+        setUrlError('')
+      } else {
+        const defaultCat =
+          activeCategory && activeCategory !== 'all' ? activeCategory : collections[0]?.id || 'video'
+        setCategory(defaultCat)
+        setBatchCategory(defaultCat)
+        setPlaylistCategory(defaultCat)
+        setNote('')
 
-      if (initialUrl) {
-        handleUrlInput(initialUrl)
-      } else if (!url) {
-        setContentType('video')
-        setStatus('watching')
+        if (initialUrl) {
+          handleUrlInput(initialUrl)
+        } else if (!url) {
+          setContentType('video')
+          setStatus('watching')
+        }
       }
     } else {
       // Clear form when closed
@@ -143,6 +177,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
       setDubStudio('')
       setRating(undefined)
       setTimecode('')
+      setNote('')
       setBatchUrlsText('')
       setPlaylistTitle('')
       setPlaylistParts([
@@ -150,7 +185,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
         { id: uid(), title: 'Часть 2', url: '' },
       ])
     }
-  }, [open, initialUrl, activeCategory, collections])
+  }, [open, initialUrl, editingPin, activeCategory, collections])
 
   // Handle URL change with auto-detection & metadata fetch
   const handleUrlInput = async (val: string) => {
@@ -275,8 +310,8 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     const lectTot = isLecture && totalLectures ? parseInt(totalLectures) : undefined
 
     const now = new Date().toISOString()
-    const newPin: Pin = {
-      id: uid(),
+    const targetPin: Pin = {
+      id: editingPin ? editingPin.id : uid(),
       title: title.trim(),
       url: url.trim(),
       platform,
@@ -296,13 +331,19 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
       lectureNumber: lectNum,
       totalLectures: lectTot,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
+      note: note.trim() || undefined,
+      notes: note.trim() || undefined,
       channelName: channelName.trim() || undefined,
-      isPinned: status === 'watching',
-      createdAt: now,
+      isPinned: editingPin ? editingPin.isPinned : status === 'watching',
+      createdAt: editingPin ? editingPin.createdAt : now,
       updatedAt: now,
     }
 
-    onAdd(newPin)
+    if (editingPin && onUpdate) {
+      onUpdate(targetPin)
+    } else {
+      onAdd(targetPin)
+    }
     onClose()
   }
 
@@ -451,7 +492,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                      Добавить в коллекцию
+                      {editingPin ? 'Редактировать закреп' : 'Добавить в коллекцию'}
                       {isLoadingMeta && (
                         <span className="flex items-center gap-1 text-[11px] text-[#f3e5ab] font-normal">
                           <Sparkles size={12} className="animate-spin text-[#ff2a85]" />
@@ -460,7 +501,9 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                       )}
                     </h3>
                     <p className="text-xs text-white/40">
-                      Вставьте ссылку, список или создайте многосерийный закреп
+                      {editingPin
+                        ? 'Измените название, ссылку, раздел, обложку, таймкод или заметку'
+                        : 'Вставьте ссылку, список или создайте многосерийный закреп'}
                     </p>
                   </div>
                 </div>
@@ -472,45 +515,47 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                 </button>
               </div>
 
-              {/* Mode Switcher Tabs */}
-              <div className="flex items-center p-1 rounded-xl bg-white/[0.03] border border-white/10 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setMode('single')}
-                  className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    mode === 'single'
-                      ? 'btn-gold text-[#f3e5ab] shadow-sm'
-                      : 'text-white/40 hover:text-white'
-                  }`}
-                >
-                  <Layers size={13} />
-                  <span>Одиночный закреп</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('batch')}
-                  className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    mode === 'batch'
-                      ? 'btn-rose text-[#ff2a85] shadow-sm'
-                      : 'text-white/40 hover:text-white'
-                  }`}
-                >
-                  <ListPlus size={13} />
-                  <span>Быстрый список</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('playlist')}
-                  className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    mode === 'playlist'
-                      ? 'bg-purple-600/30 text-purple-300 border border-purple-500/30 shadow-sm'
-                      : 'text-white/40 hover:text-white'
-                  }`}
-                >
-                  <ListVideo size={13} />
-                  <span>Плейлист / Части</span>
-                </button>
-              </div>
+              {/* Mode Switcher Tabs (Only when creating new, not when editing) */}
+              {!editingPin && (
+                <div className="flex items-center p-1 rounded-xl bg-white/[0.03] border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setMode('single')}
+                    className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      mode === 'single'
+                        ? 'btn-gold text-[#f3e5ab] shadow-sm'
+                        : 'text-white/40 hover:text-white'
+                    }`}
+                  >
+                    <Layers size={13} />
+                    <span>Одиночный закреп</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('batch')}
+                    className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      mode === 'batch'
+                        ? 'btn-rose text-[#ff2a85] shadow-sm'
+                        : 'text-white/40 hover:text-white'
+                    }`}
+                  >
+                    <ListPlus size={13} />
+                    <span>Быстрый список</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('playlist')}
+                    className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      mode === 'playlist'
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/30 shadow-sm'
+                        : 'text-white/40 hover:text-white'
+                    }`}
+                  >
+                    <ListVideo size={13} />
+                    <span>Плейлист / Части</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* ───── MODE 1: SINGLE PIN FORM ───── */}
@@ -936,6 +981,23 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                   </div>
                 </div>
 
+                {/* Note / Заметка */}
+                <div>
+                  <label
+                    className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    Заметка к закреплению
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Короткий комментарий, напоминание или совет к просмотру..."
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-white/20 focus:border-[#f3e5ab] transition-all resize-none"
+                  />
+                </div>
+
                 {/* Footer Buttons */}
                 <div className="pt-4 border-t border-white/[0.08] flex items-center justify-end gap-3">
                   <button
@@ -949,7 +1011,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                     type="submit"
                     className="px-5 py-2.5 rounded-xl btn-gold text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer"
                   >
-                    <Check size={14} /> Создать закреп
+                    <Check size={14} /> {editingPin ? 'Сохранить изменения' : 'Создать закреп'}
                   </button>
                 </div>
               </form>

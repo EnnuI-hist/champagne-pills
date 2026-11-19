@@ -10,6 +10,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { TrashModal } from './components/TrashModal'
 import { ExportModal } from './components/ExportModal'
 import { CollectionModal } from './components/CollectionModal'
+import { ManageSectionsModal } from './components/ManageSectionsModal'
 import { ToastUndo } from './components/ToastUndo'
 import { PinGrid } from './components/PinGrid'
 
@@ -43,6 +44,7 @@ export default function App() {
   // Collections (Categories)
   const [collections, setCollections] = useState<Collection[]>(loadCollections)
   const [showCollectionModal, setShowCollectionModal] = useState(false)
+  const [showManageSectionsModal, setShowManageSectionsModal] = useState(false)
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
   // Pins & Data
@@ -73,6 +75,12 @@ export default function App() {
     saveQuickLinks(updated)
   }
 
+  const handleUpdateQuickLink = (updatedLink: QuickLink) => {
+    const updated = quickLinks.map((l) => (l.id === updatedLink.id ? updatedLink : l))
+    setQuickLinks(updated)
+    saveQuickLinks(updated)
+  }
+
   const handleRemoveQuickLink = (id: string) => {
     const updated = quickLinks.filter((l) => l.id !== id)
     setQuickLinks(updated)
@@ -98,6 +106,7 @@ export default function App() {
 
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false)
+  const [editingPin, setEditingPin] = useState<Pin | null>(null)
   const [initialPasteUrl, setInitialPasteUrl] = useState('')
   const [activePlayerPin, setActivePlayerPin] = useState<Pin | null>(null)
   const [showPomodoroModal, setShowPomodoroModal] = useState(false)
@@ -165,6 +174,16 @@ export default function App() {
     if (category === id) {
       setCategory('all')
     }
+  }
+
+  const handleReorderCollections = (newCols: Collection[]) => {
+    setCollections(newCols)
+    saveCollections(newCols)
+  }
+
+  const handleOpenEditPin = (pin: Pin) => {
+    setEditingPin(pin)
+    setShowAddModal(true)
   }
 
   // Pin Actions
@@ -372,6 +391,7 @@ export default function App() {
         <QuickDock
           links={quickLinks}
           onAdd={handleAddQuickLink}
+          onUpdate={handleUpdateQuickLink}
           onRemove={handleRemoveQuickLink}
         />
 
@@ -392,6 +412,8 @@ export default function App() {
               setEditingCollection(col)
               setShowCollectionModal(true)
             }}
+            onDeleteCollection={handleDeleteCollection}
+            onOpenManageCollections={() => setShowManageSectionsModal(true)}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             selectedTag={selectedTag}
@@ -399,6 +421,7 @@ export default function App() {
             onPlayPin={(p) => setActivePlayerPin(p)}
             onTogglePin={handleTogglePin}
             onDeletePin={softDelete}
+            onEditPin={handleOpenEditPin}
             onUpdateStatus={handleUpdateStatus}
             onUpdateEpisode={handleUpdateEpisode}
             onUpdateTimecode={handleUpdateTimecode}
@@ -408,6 +431,7 @@ export default function App() {
             onMoveUp={movePinUp}
             onMoveDown={movePinDown}
             onOpenAddModal={() => {
+              setEditingPin(null)
               setInitialPasteUrl('')
               setShowAddModal(true)
             }}
@@ -434,9 +458,12 @@ export default function App() {
         open={showAddModal}
         onClose={() => {
           setShowAddModal(false)
+          setEditingPin(null)
           setInitialPasteUrl('')
         }}
         onAdd={addPin}
+        onUpdate={updatePin}
+        editingPin={editingPin}
         onAddBatch={handleAddBatch}
         initialUrl={initialPasteUrl}
         collections={collections}
@@ -458,6 +485,24 @@ export default function App() {
         onSave={handleSaveCollection}
         onDelete={handleDeleteCollection}
         initialCollection={editingCollection}
+      />
+
+      {/* Manage Sections Modal (Reorder, Rename, Delete) */}
+      <ManageSectionsModal
+        open={showManageSectionsModal}
+        onClose={() => setShowManageSectionsModal(false)}
+        collections={collections}
+        onReorder={handleReorderCollections}
+        onEdit={(col) => {
+          setEditingCollection(col)
+          setShowCollectionModal(true)
+        }}
+        onDelete={handleDeleteCollection}
+        onAddNew={() => {
+          setEditingCollection(null)
+          setShowCollectionModal(true)
+        }}
+        getPinCount={(id) => allActivePins.filter((p) => p.category === id).length}
       />
 
       {/* Split-Screen Cinema & Notes Player Modal */}

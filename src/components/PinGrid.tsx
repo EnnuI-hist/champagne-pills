@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Settings2, X, Search } from 'lucide-react'
+import { Plus, Settings2, X, Search, Edit2 } from 'lucide-react'
 import type { Pin, Category, StatusFilter, Collection, PlaylistPart } from '../types'
 import { PinCard } from './PinCard'
 
@@ -12,6 +12,8 @@ interface PinGridProps {
   onCategoryChange: (cat: Category) => void
   onOpenAddCollection: () => void
   onOpenEditCollection: (col: Collection) => void
+  onDeleteCollection: (id: string) => void
+  onOpenManageCollections: () => void
   statusFilter: StatusFilter
   onStatusFilterChange: (st: StatusFilter) => void
   selectedTag?: string
@@ -19,6 +21,7 @@ interface PinGridProps {
   onPlayPin: (pin: Pin) => void
   onTogglePin: (id: string) => void
   onDeletePin: (id: string) => void
+  onEditPin: (pin: Pin) => void
   onUpdateStatus?: (id: string, status: import('../types').Status) => void
   onUpdateEpisode: (id: string, newEp: number) => void
   onUpdateTimecode: (id: string, newTc: string) => void
@@ -45,6 +48,8 @@ export const PinGrid: React.FC<PinGridProps> = ({
   onCategoryChange,
   onOpenAddCollection,
   onOpenEditCollection,
+  onDeleteCollection,
+  onOpenManageCollections,
   statusFilter,
   onStatusFilterChange,
   selectedTag,
@@ -52,6 +57,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
   onPlayPin,
   onTogglePin,
   onDeletePin,
+  onEditPin,
   onUpdateStatus,
   onUpdateEpisode,
   onUpdateTimecode,
@@ -112,7 +118,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
             return (
               <div
                 key={col.id}
-                className={`flex items-center rounded-xl transition-all ${
+                className={`group flex items-center rounded-xl transition-all ${
                   active
                     ? 'btn-gold text-[#f3e5ab] shadow-sm'
                     : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
@@ -136,20 +142,45 @@ export const PinGrid: React.FC<PinGridProps> = ({
                   </span>
                 </button>
 
-                {/* Edit / Configure / Delete button */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onOpenEditCollection(col)
-                  }}
-                  className={`p-1 mr-1 rounded-lg transition-colors cursor-pointer ${
-                    active ? 'text-[#f3e5ab]/70 hover:text-[#f3e5ab]' : 'text-white/30 hover:text-white'
+                {/* Edit (pencil) & Delete (x) buttons on each tab */}
+                <div
+                  className={`flex items-center gap-0.5 pr-1.5 transition-opacity ${
+                    active ? 'opacity-90 hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
                   }`}
-                  title="Настроить или удалить раздел"
                 >
-                  <Settings2 size={11} />
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenEditCollection(col)
+                    }}
+                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                      active
+                        ? 'text-[#f3e5ab]/80 hover:text-[#f3e5ab] hover:bg-black/20'
+                        : 'text-white/40 hover:text-[#f3e5ab] hover:bg-white/10'
+                    }`}
+                    title="Редактировать раздел (переименовать, цвет, иконка)"
+                  >
+                    <Edit2 size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (confirm(`Удалить раздел «${col.name}»? Закрепы не удалятся, а останутся во вкладке «Все».`)) {
+                        onDeleteCollection(col.id)
+                      }
+                    }}
+                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                      active
+                        ? 'text-red-300 hover:text-red-400 hover:bg-black/20'
+                        : 'text-white/40 hover:text-red-400 hover:bg-red-500/10'
+                    }`}
+                    title="Удалить раздел (закрепы останутся в «Все»)"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -163,6 +194,17 @@ export const PinGrid: React.FC<PinGridProps> = ({
           >
             <Plus size={13} />
             <span className="hidden sm:inline">Новый раздел</span>
+          </button>
+
+          {/* Manage Sections Gear Button */}
+          <button
+            type="button"
+            onClick={onOpenManageCollections}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-white/50 hover:text-white border border-white/5 transition-all cursor-pointer"
+            title="Управление разделами (порядок, переименование, удаление)"
+          >
+            <Settings2 size={13} />
+            <span className="hidden md:inline">Разделы</span>
           </button>
         </div>
 
@@ -240,6 +282,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
                 onPlay={onPlayPin}
                 onTogglePin={onTogglePin}
                 onDelete={onDeletePin}
+                onEditPin={onEditPin}
                 onUpdateStatus={onUpdateStatus}
                 onUpdateEpisode={onUpdateEpisode}
                 onUpdateTimecode={onUpdateTimecode}
