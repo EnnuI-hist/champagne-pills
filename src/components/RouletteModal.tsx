@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Dices, Play, RefreshCw, Sparkles, ExternalLink } from 'lucide-react'
+import { X, Dices, Play, RefreshCw, ExternalLink } from 'lucide-react'
 import type { Pin } from '../types'
 import { PlatformBadge } from './Badges'
+import { PinPoster } from './PinPoster'
 
 interface RouletteModalProps {
   open: boolean
@@ -118,18 +119,8 @@ export const RouletteModal: React.FC<RouletteModalProps> = ({
                   />
 
                   <div className="relative aspect-video rounded-xl overflow-hidden bg-black/60 border border-white/10">
-                    {selectedPin.thumbnailUrl || selectedPin.customThumbnailUrl ? (
-                      <img
-                        src={selectedPin.customThumbnailUrl || selectedPin.thumbnailUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/20">
-                        <Sparkles size={32} />
-                      </div>
-                    )}
-                    <div className="absolute top-2 left-2">
+                    <PinPoster pin={selectedPin} />
+                    <div className="absolute top-2 left-2 z-10">
                       <PlatformBadge platform={selectedPin.platform} />
                     </div>
                   </div>

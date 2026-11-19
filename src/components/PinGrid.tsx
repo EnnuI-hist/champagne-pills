@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Filter, Settings2, Zap, ArrowRight } from 'lucide-react'
+import { Plus, Settings2, X, Search } from 'lucide-react'
 import type { Pin, Category, StatusFilter, Collection, PlaylistPart } from '../types'
 import { PinCard } from './PinCard'
 
@@ -12,11 +12,8 @@ interface PinGridProps {
   onCategoryChange: (cat: Category) => void
   onOpenAddCollection: () => void
   onOpenEditCollection: (col: Collection) => void
-  onQuickAdd: (url: string, category: string) => void
   statusFilter: StatusFilter
   onStatusFilterChange: (st: StatusFilter) => void
-  search: string
-  onSearchChange: (val: string) => void
   selectedTag?: string
   onSelectTag: (tag?: string) => void
   onPlayPin: (pin: Pin) => void
@@ -30,7 +27,6 @@ interface PinGridProps {
   onMoveUp: (id: string) => void
   onMoveDown: (id: string) => void
   onOpenAddModal: () => void
-  allTags: string[]
 }
 
 const STATUS_CONFIG: { value: StatusFilter; label: string }[] = [
@@ -48,11 +44,8 @@ export const PinGrid: React.FC<PinGridProps> = ({
   onCategoryChange,
   onOpenAddCollection,
   onOpenEditCollection,
-  onQuickAdd,
   statusFilter,
   onStatusFilterChange,
-  search,
-  onSearchChange,
   selectedTag,
   onSelectTag,
   onPlayPin,
@@ -66,11 +59,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
   onMoveUp,
   onMoveDown,
   onOpenAddModal,
-  allTags,
 }) => {
-  const [quickUrl, setQuickUrl] = useState('')
-  const [isQuickAdding, setIsQuickAdding] = useState(false)
-
   // Counts per category for the tabs
   const getCategoryCount = (catId: Category): number => {
     if (catId === 'all') return allActivePins.length
@@ -86,31 +75,19 @@ export const PinGrid: React.FC<PinGridProps> = ({
     return allActivePins.filter((p) => p.status === st).length
   }
 
-  const handleQuickSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!quickUrl.trim()) return
-    setIsQuickAdding(true)
-    const targetCategory = category === 'all' ? (collections[0]?.id || 'default') : category
-    onQuickAdd(quickUrl.trim(), targetCategory)
-    setQuickUrl('')
-    setTimeout(() => setIsQuickAdding(false), 1200)
-  }
-
-  const activeCollection = collections.find((c) => c.id === category)
-
   return (
-    <div className="space-y-6">
-      {/* Dynamic Category Tabs with Count Badges & "+ Новый раздел" */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
-        {/* Category Tabs Scrollable */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+    <div className="space-y-5">
+      {/* ── Single Clean Navigation Bar: Left Collections, Right Status Filter ── */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
+        {/* Left: Collections Tabs Scrollable */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none min-w-0">
           {/* Base "Все" Tab */}
           <button
             type="button"
             onClick={() => onCategoryChange('all')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               category === 'all'
-                ? 'btn-gold text-[#f3e5ab] shadow-md'
+                ? 'btn-gold text-[#f3e5ab] shadow-sm'
                 : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
             }`}
           >
@@ -135,14 +112,14 @@ export const PinGrid: React.FC<PinGridProps> = ({
                 key={col.id}
                 className={`flex items-center rounded-xl transition-all ${
                   active
-                    ? 'btn-gold text-[#f3e5ab] shadow-md'
+                    ? 'btn-gold text-[#f3e5ab] shadow-sm'
                     : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => onCategoryChange(col.id)}
-                  className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold whitespace-nowrap cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer"
                 >
                   {col.emoji && <span>{col.emoji}</span>}
                   <span>{col.name}</span>
@@ -164,96 +141,31 @@ export const PinGrid: React.FC<PinGridProps> = ({
                     e.stopPropagation()
                     onOpenEditCollection(col)
                   }}
-                  className={`p-1.5 mr-1 rounded-lg transition-colors cursor-pointer ${
+                  className={`p-1 mr-1 rounded-lg transition-colors cursor-pointer ${
                     active ? 'text-[#f3e5ab]/70 hover:text-[#f3e5ab]' : 'text-white/30 hover:text-white'
                   }`}
                   title="Настроить или удалить раздел"
                 >
-                  <Settings2 size={12} />
+                  <Settings2 size={11} />
                 </button>
               </div>
             )
           })}
 
-          {/* "+ Новый раздел" button */}
+          {/* Compact "+" Button */}
           <button
             type="button"
             onClick={onOpenAddCollection}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-[#f3e5ab]/90 hover:text-[#f3e5ab] border border-dashed border-[#f3e5ab]/30 hover:border-[#f3e5ab]/60 transition-all cursor-pointer"
-            title="Создать новый раздел / плейлист"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-[#f3e5ab]/80 hover:text-[#f3e5ab] border border-dashed border-[#f3e5ab]/30 hover:border-[#f3e5ab]/60 transition-all cursor-pointer"
+            title="Создать новый раздел"
           >
             <Plus size={13} />
-            <span>+ Новый раздел</span>
+            <span className="hidden sm:inline">Новый раздел</span>
           </button>
         </div>
 
-        {/* Search input */}
-        <div className="relative min-w-[260px]">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Поиск по названию, автору..."
-            className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder:text-white/30 focus:border-[#f3e5ab] transition-all"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => onSearchChange('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white cursor-pointer"
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Inline Quick-Add Bar (Вставил ссылку -> нажал Enter -> закреп создался) */}
-      <form
-        onSubmit={handleQuickSubmit}
-        className="relative flex items-center gap-2 p-1.5 pl-3.5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 focus-within:border-[#f3e5ab]/50 transition-all"
-      >
-        <div className="flex items-center gap-2 text-white/40 shrink-0">
-          <Zap size={14} className="text-[#f3e5ab]" />
-          <span className="text-xs hidden sm:inline text-white/50">Быстрое добавление:</span>
-        </div>
-        <input
-          type="text"
-          value={quickUrl}
-          onChange={(e) => setQuickUrl(e.target.value)}
-          placeholder={
-            category === 'all'
-              ? 'Вставьте ссылку и нажмите Enter для создания закрепа...'
-              : `Вставьте ссылку в раздел «${activeCollection?.name || category}» и нажмите Enter...`
-          }
-          className="flex-1 bg-transparent border-0 text-xs text-white placeholder:text-white/30 focus:outline-none py-1.5"
-        />
-        <button
-          type="submit"
-          disabled={!quickUrl.trim()}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-            quickUrl.trim()
-              ? 'btn-gold text-[#f3e5ab] shadow-md'
-              : 'bg-white/5 text-white/20 cursor-not-allowed'
-          }`}
-        >
-          {isQuickAdding ? (
-            <span className="text-green-400">Добавлено!</span>
-          ) : (
-            <>
-              <span>Добавить</span>
-              <ArrowRight size={12} />
-            </>
-          )}
-        </button>
-      </form>
-
-      {/* Status Filters & Tag Cloud Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-        {/* Status filters */}
-        <div className="flex items-center gap-1 bg-white/[0.02] p-1 rounded-xl border border-white/5">
-          <Filter size={12} className="text-white/30 ml-2 mr-1" />
+        {/* Right: Compact Status Filter */}
+        <div className="flex items-center gap-1 bg-white/[0.02] p-1 rounded-xl border border-white/5 shrink-0 self-start sm:self-auto">
           {STATUS_CONFIG.map((sf) => {
             const active = statusFilter === sf.value
             const count = getStatusCount(sf.value)
@@ -262,61 +174,46 @@ export const PinGrid: React.FC<PinGridProps> = ({
                 key={sf.value}
                 type="button"
                 onClick={() => onStatusFilterChange(sf.value)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   active
                     ? 'bg-white/15 text-white font-semibold'
                     : 'text-white/40 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <span>{sf.label}</span>
-                <span className="text-[10px] mono opacity-60">
-                  {count}
-                </span>
+                <span className="text-[10px] mono opacity-60">{count}</span>
               </button>
             )
           })}
         </div>
-
-        {/* Tag Filters Cloud */}
-        {allTags.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
-            {selectedTag && (
-              <button
-                type="button"
-                onClick={() => onSelectTag(undefined)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#ff2a85]/20 text-[#ff2a85] border border-[#ff2a85]/30 font-semibold cursor-pointer"
-              >
-                <span>{selectedTag}</span>
-                <X size={11} />
-              </button>
-            )}
-
-            {!selectedTag &&
-              allTags.slice(0, 8).map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => onSelectTag(tag)}
-                  className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-colors cursor-pointer text-[11px]"
-                >
-                  {tag}
-                </button>
-              ))}
-          </div>
-        )}
       </div>
 
-      {/* Cards Grid */}
+      {/* Active Tag Filter indicator (if a tag is selected) */}
+      {selectedTag && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-white/40">Фильтр по тегу:</span>
+          <button
+            type="button"
+            onClick={() => onSelectTag(undefined)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#ff2a85]/20 text-[#ff2a85] border border-[#ff2a85]/30 font-semibold cursor-pointer"
+          >
+            <span>{selectedTag}</span>
+            <X size={11} />
+          </button>
+        </div>
+      )}
+
+      {/* ── Cards Grid (Compact 3-column layout) ── */}
       {pins.length === 0 ? (
-        <div className="py-16 text-center space-y-3 glass-card rounded-3xl border border-white/5 p-8">
-          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-white/30">
-            <Search size={28} />
+        <div className="py-16 text-center space-y-3 glass-card rounded-2xl border border-white/5 p-8">
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-white/30">
+            <Search size={24} />
           </div>
-          <h3 className="text-base font-semibold text-white/80">Ничего не найдено</h3>
+          <h3 className="text-base font-semibold text-white/80">В этом разделе пусто</h3>
           <p className="text-xs text-white/40 max-w-sm mx-auto">
-            {search || selectedTag || statusFilter !== 'all'
-              ? 'Попробуйте изменить поисковый запрос или сбросить активные фильтры'
-              : 'В этом разделе пока нет закрепов. Добавьте первый закреп через кнопку или Ctrl+V!'}
+            {selectedTag || statusFilter !== 'all'
+              ? 'Попробуйте сбросить фильтр по статусу или тегу'
+              : 'Вставьте ссылку через Ctrl+V или нажмите кнопку «+ Закреп», чтобы добавить первый медиа-файл'}
           </p>
           <div className="pt-2">
             <button
@@ -331,7 +228,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
       ) : (
         <motion.div
           layout
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
         >
           <AnimatePresence>
             {pins.map((pin, index) => (

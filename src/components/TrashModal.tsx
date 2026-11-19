@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Trash2, RotateCcw, AlertTriangle, ExternalLink } from 'lucide-react'
 import type { Pin } from '../types'
 import { PlatformBadge } from './Badges'
+import { PinPoster } from './PinPoster'
 
 interface TrashModalProps {
   open: boolean
@@ -95,17 +96,9 @@ export const TrashModal: React.FC<TrashModalProps> = ({
                     className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      {pin.thumbnailUrl ? (
-                        <img
-                          src={pin.thumbnailUrl}
-                          alt=""
-                          className="w-14 h-9 object-cover rounded-lg shrink-0 border border-white/10"
-                        />
-                      ) : (
-                        <div className="w-14 h-9 bg-white/5 rounded-lg shrink-0 flex items-center justify-center text-white/20">
-                          <Trash2 size={14} />
-                        </div>
-                      )}
+                      <div className="w-14 h-9 rounded-lg shrink-0 overflow-hidden border border-white/10">
+                        <PinPoster pin={pin} className="w-full h-full object-cover" />
+                      </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <p className="text-xs font-semibold text-white/90 truncate">{pin.title}</p>

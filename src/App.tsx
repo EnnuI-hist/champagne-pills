@@ -24,8 +24,6 @@ import {
   saveCollections,
 } from './utils/storage'
 import { getBlobUrl } from './utils/db'
-import { detectPlatform, extractYouTubeId, uid } from './utils'
-import { youtubeHqThumb, fetchVideoMeta } from './utils/metadata'
 
 import type {
   Pin,
@@ -95,7 +93,7 @@ export default function App() {
   // Filters & State
   const [category, setCategory] = useState<Category>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [search, setSearch] = useState('')
+  const search = ''
   const [selectedTag, setSelectedTag] = useState<string | undefined>()
 
   // Modals state
@@ -130,15 +128,6 @@ export default function App() {
     statusFilter,
     selectedTag,
   )
-
-  // Collect all unique tags
-  const allTags = useMemo(() => {
-    const set = new Set<string>()
-    pins.forEach((p) => {
-      p.tags?.forEach((t) => set.add(t))
-    })
-    return Array.from(set)
-  }, [pins])
 
   // Focus Hero: Up to 2 pinned cards (or watching cards if none are explicitly pinned)
   const heroPins = useMemo(() => {
@@ -268,60 +257,6 @@ export default function App() {
     [],
   )
 
-  // Inline Quick-Add handler
-  const handleQuickAdd = async (urlStr: string, targetCat: string) => {
-    const trimmed = urlStr.trim()
-    if (!trimmed) return
-    const plat = detectPlatform(trimmed)
-    const ytId = extractYouTubeId(trimmed)
-    const now = new Date().toISOString()
-
-    let titleStr = trimmed
-    try {
-      const u = new URL(trimmed)
-      titleStr = u.pathname.split('/').filter(Boolean).pop() || u.hostname
-    } catch {
-      // fallback
-    }
-    if (ytId) {
-      titleStr = `YouTube • ${ytId}`
-    }
-
-    const newPin: Pin = {
-      id: uid(),
-      title: titleStr,
-      url: trimmed,
-      platform: plat,
-      contentType: 'video',
-      category: targetCat,
-      status: 'watching',
-      thumbnailUrl: ytId ? youtubeHqThumb(ytId) : undefined,
-      isPinned: false,
-      createdAt: now,
-      updatedAt: now,
-    }
-
-    addPin(newPin)
-
-    // Background enrichment
-    if (/^https?:\/\//i.test(trimmed)) {
-      try {
-        const meta = await fetchVideoMeta(trimmed)
-        if (meta.title || meta.author) {
-          updatePin({
-            ...newPin,
-            title: meta.title || newPin.title,
-            channelName: meta.author || newPin.channelName,
-            thumbnailUrl: newPin.thumbnailUrl || meta.thumbnailUrl,
-            updatedAt: new Date().toISOString(),
-          })
-        }
-      } catch {
-        // graceful fallback
-      }
-    }
-  }
-
   // Batch Add handler
   const handleAddBatch = (batchPins: Pin[]) => {
     batchPins.forEach((p) => addPin(p))
@@ -442,7 +377,7 @@ export default function App() {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Hero Section ("Сейчас в фокусе" - 1-2 главных закрепленных карточки) */}
           <HeroSection
             pins={heroPins}
@@ -465,11 +400,8 @@ export default function App() {
               setEditingCollection(col)
               setShowCollectionModal(true)
             }}
-            onQuickAdd={handleQuickAdd}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
-            search={search}
-            onSearchChange={setSearch}
             selectedTag={selectedTag}
             onSelectTag={setSelectedTag}
             onPlayPin={(p) => setActivePlayerPin(p)}
@@ -486,7 +418,6 @@ export default function App() {
               setInitialPasteUrl('')
               setShowAddModal(true)
             }}
-            allTags={allTags}
           />
         </main>
 

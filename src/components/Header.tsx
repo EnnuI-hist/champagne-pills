@@ -56,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="glass-header sticky top-0 z-40 w-full px-3 sm:px-6 py-2.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+      <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
         {/* Left: Brand Logo & Wordmark */}
         <div className="flex items-center gap-3">
           <BrandWordmark size="md" />
@@ -95,6 +95,16 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Actions Bar */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Mobile Search Button */}
+          <button
+            type="button"
+            onClick={onOpenCommand}
+            className="md:hidden p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] text-white/60 hover:text-white transition-all cursor-pointer"
+            title="Поиск (Ctrl+K)"
+          >
+            <Search size={14} className="text-[#f3e5ab]" />
+          </button>
+
           {/* Pomodoro Focus & Noise Popover Widget in Header */}
           <PomodoroPopover
             display={pomodoroDisplay}

@@ -34,8 +34,9 @@ export const QuickDock: React.FC<QuickDockProps> = ({ links, onAdd, onRemove }) 
   }
 
   return (
-    <div className="w-full flex items-center justify-between gap-3 px-4 py-2 bg-white/[0.02] border-b border-white/[0.06] backdrop-blur-md">
-      <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none flex-1">
+    <div className="w-full bg-white/[0.02] border-b border-white/[0.06] backdrop-blur-md py-2">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 w-full">
+        <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none flex-1">
         <span
           className="text-[10px] uppercase tracking-wider text-white/30 mr-1 hidden sm:inline"
           style={{ fontFamily: "'JetBrains Mono', monospace" }}
@@ -127,11 +128,12 @@ export const QuickDock: React.FC<QuickDockProps> = ({ links, onAdd, onRemove }) 
         )}
       </div>
 
-      <div
-        className="hidden md:flex items-center gap-2 text-[10px] text-white/30"
-        style={{ fontFamily: "'JetBrains Mono', monospace" }}
-      >
-        <span>Вкладки браузера не нужны</span>
+        <div
+          className="hidden md:flex items-center gap-2 text-[10px] text-white/30"
+          style={{ fontFamily: "'JetBrains Mono', monospace" }}
+        >
+          <span>Вкладки браузера не нужны</span>
+        </div>
       </div>
     </div>
   )

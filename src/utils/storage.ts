@@ -25,15 +25,19 @@ export function loadPins(): Pin[] {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const pins = ((JSON.parse(raw) as AppData).pins || []) as Pin[]
-      return pins.filter(
-        (p) => !/егэ|олимп|смутное|история россии с нуля/i.test(p.title) && p.category !== 'history'
-      )
+      return pins
+        .filter(
+          (p) => !/егэ|олимп|смутное|история россии с нуля/i.test(p.title) && p.category !== 'history'
+        )
+        .map((p) => (p.thumbnailUrl?.includes('J2DaIWy_mPQ') ? { ...p, thumbnailUrl: undefined } : p))
     }
     const legacy = migrateLegacy()
     if (legacy) {
-      const cleaned = legacy.filter(
-        (p) => !/егэ|олимп|смутное|история россии с нуля/i.test(p.title) && p.category !== 'history'
-      )
+      const cleaned = legacy
+        .filter(
+          (p) => !/егэ|олимп|смутное|история россии с нуля/i.test(p.title) && p.category !== 'history'
+        )
+        .map((p) => (p.thumbnailUrl?.includes('J2DaIWy_mPQ') ? { ...p, thumbnailUrl: undefined } : p))
       savePins(cleaned)
       return cleaned
     }
@@ -162,7 +166,6 @@ export function getDemoData(): Pin[] {
       contentType: 'video',
       category: 'video',
       status: 'queued',
-      thumbnailUrl: 'https://img.youtube.com/vi/J2DaIWy_mPQ/hqdefault.jpg',
       note: 'Рекомендация для вечернего просмотра.',
       channelName: 'Гейм-критик',
       isPinned: false,
