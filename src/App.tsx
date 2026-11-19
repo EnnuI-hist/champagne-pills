@@ -9,6 +9,7 @@ import { RouletteModal } from './components/RouletteModal'
 import { CommandPalette } from './components/CommandPalette'
 import { TrashModal } from './components/TrashModal'
 import { ExportModal } from './components/ExportModal'
+import { CollectionModal } from './components/CollectionModal'
 import { ToastUndo } from './components/ToastUndo'
 import { HeroSection } from './components/HeroCard'
 import { PinGrid } from './components/PinGrid'
@@ -16,16 +17,36 @@ import { PinGrid } from './components/PinGrid'
 import { useTheme } from './hooks/useTheme'
 import { usePins, useFilteredPins } from './hooks/usePins'
 import { usePomodoro } from './hooks/usePomodoro'
-import { loadQuickLinks, saveQuickLinks } from './utils/storage'
+import {
+  loadQuickLinks,
+  saveQuickLinks,
+  loadCollections,
+  saveCollections,
+} from './utils/storage'
 import { getBlobUrl } from './utils/db'
+import { detectPlatform, extractYouTubeId, uid } from './utils'
+import { youtubeHqThumb, fetchVideoMeta } from './utils/metadata'
 
-import type { Pin, QuickLink, Category, StatusFilter, HistoryPeriod } from './types'
+import type {
+  Pin,
+  QuickLink,
+  Category,
+  StatusFilter,
+  HistoryPeriod,
+  Collection,
+  PlaylistPart,
+} from './types'
 
 export default function App() {
   // Theme & Atmosphere
   const { settings, setPreset, setCustomBg, setDim, setBlur } = useTheme()
   const [customBgUrl, setCustomBgUrl] = useState<string | null>(null)
   const [showThemeModal, setShowThemeModal] = useState(false)
+
+  // Collections (Categories)
+  const [collections, setCollections] = useState<Collection[]>(loadCollections)
+  const [showCollectionModal, setShowCollectionModal] = useState(false)
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
   // Pins & Data
   const {
@@ -141,6 +162,28 @@ export default function App() {
     return filtered.filter((p) => !heroIds.has(p.id))
   }, [filtered, heroPins])
 
+  // Collection Handlers
+  const handleSaveCollection = (col: Collection) => {
+    setCollections((prev) => {
+      const exists = prev.some((c) => c.id === col.id)
+      const updated = exists ? prev.map((c) => (c.id === col.id ? col : c)) : [...prev, col]
+      saveCollections(updated)
+      return updated
+    })
+    setCategory(col.id)
+  }
+
+  const handleDeleteCollection = (id: string) => {
+    setCollections((prev) => {
+      const updated = prev.filter((c) => c.id !== id)
+      saveCollections(updated)
+      return updated
+    })
+    if (category === id) {
+      setCategory('all')
+    }
+  }
+
   // Pin Actions
   const handleTogglePin = useCallback(
     (id: string) => {
@@ -194,6 +237,98 @@ export default function App() {
     },
     [pins, updatePin],
   )
+
+  // Multi-part playlist toggle
+  const handleTogglePart = useCallback(
+    (pinId: string, partId: string) => {
+      const target = pins.find((p) => p.id === pinId)
+      if (target && target.parts) {
+        const updatedParts = target.parts.map((pt) =>
+          pt.id === partId ? { ...pt, isCompleted: !pt.isCompleted } : pt,
+        )
+        const updatedPin = {
+          ...target,
+          parts: updatedParts,
+          updatedAt: new Date().toISOString(),
+        }
+        updatePin(updatedPin)
+        if (activePlayerPin && activePlayerPin.id === pinId) {
+          setActivePlayerPin(updatedPin)
+        }
+      }
+    },
+    [pins, updatePin, activePlayerPin],
+  )
+
+  const handlePlayPart = useCallback(
+    (pin: Pin, part: PlaylistPart) => {
+      setActivePlayerPin({
+        ...pin,
+        url: part.url,
+        timecode: part.timecode || pin.timecode,
+      })
+    },
+    [],
+  )
+
+  // Inline Quick-Add handler
+  const handleQuickAdd = async (urlStr: string, targetCat: string) => {
+    const trimmed = urlStr.trim()
+    if (!trimmed) return
+    const plat = detectPlatform(trimmed)
+    const ytId = extractYouTubeId(trimmed)
+    const now = new Date().toISOString()
+
+    let titleStr = trimmed
+    try {
+      const u = new URL(trimmed)
+      titleStr = u.pathname.split('/').filter(Boolean).pop() || u.hostname
+    } catch {
+      // fallback
+    }
+    if (ytId) {
+      titleStr = `YouTube • ${ytId}`
+    }
+
+    const newPin: Pin = {
+      id: uid(),
+      title: titleStr,
+      url: trimmed,
+      platform: plat,
+      contentType: 'video',
+      category: targetCat,
+      status: 'watching',
+      thumbnailUrl: ytId ? youtubeHqThumb(ytId) : undefined,
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    addPin(newPin)
+
+    // Background enrichment
+    if (/^https?:\/\//i.test(trimmed)) {
+      try {
+        const meta = await fetchVideoMeta(trimmed)
+        if (meta.title || meta.author) {
+          updatePin({
+            ...newPin,
+            title: meta.title || newPin.title,
+            channelName: meta.author || newPin.channelName,
+            thumbnailUrl: newPin.thumbnailUrl || meta.thumbnailUrl,
+            updatedAt: new Date().toISOString(),
+          })
+        }
+      } catch {
+        // graceful fallback
+      }
+    }
+  }
+
+  // Batch Add handler
+  const handleAddBatch = (batchPins: Pin[]) => {
+    batchPins.forEach((p) => addPin(p))
+  }
 
   // Global Keyboard Shortcuts (Ctrl+V, N, Ctrl+K)
   useEffect(() => {
@@ -318,12 +453,22 @@ export default function App() {
             onTogglePin={handleTogglePin}
           />
 
-          {/* Pin Grid & Navigation */}
+          {/* Dynamic Pin Grid & Navigation */}
           <PinGrid
             pins={displayPins}
             allActivePins={allActivePins}
+            collections={collections}
             category={category}
             onCategoryChange={setCategory}
+            onOpenAddCollection={() => {
+              setEditingCollection(null)
+              setShowCollectionModal(true)
+            }}
+            onOpenEditCollection={(col) => {
+              setEditingCollection(col)
+              setShowCollectionModal(true)
+            }}
+            onQuickAdd={handleQuickAdd}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             historyPeriodFilter={historyPeriodFilter}
@@ -338,6 +483,8 @@ export default function App() {
             onUpdateEpisode={handleUpdateEpisode}
             onUpdateTimecode={handleUpdateTimecode}
             onUpdateRating={handleUpdateRating}
+            onTogglePart={handleTogglePart}
+            onPlayPart={handlePlayPart}
             onMoveUp={movePinUp}
             onMoveDown={movePinDown}
             onOpenAddModal={() => {
@@ -363,7 +510,7 @@ export default function App() {
 
       {/* ── Modals & Overlays ── */}
 
-      {/* Add / Edit Pin Modal */}
+      {/* Add / Edit Pin Modal (Single, Batch list, Multi-part Playlist) */}
       <AddPinModal
         open={showAddModal}
         onClose={() => {
@@ -371,7 +518,27 @@ export default function App() {
           setInitialPasteUrl('')
         }}
         onAdd={addPin}
+        onAddBatch={handleAddBatch}
         initialUrl={initialPasteUrl}
+        collections={collections}
+        onOpenAddCollection={() => {
+          setShowAddModal(false)
+          setEditingCollection(null)
+          setShowCollectionModal(true)
+        }}
+        activeCategory={category}
+      />
+
+      {/* Collection Modal (Create / Edit custom sections) */}
+      <CollectionModal
+        open={showCollectionModal}
+        onClose={() => {
+          setShowCollectionModal(false)
+          setEditingCollection(null)
+        }}
+        onSave={handleSaveCollection}
+        onDelete={handleDeleteCollection}
+        initialCollection={editingCollection}
       />
 
       {/* Split-Screen Cinema & Notes Player Modal */}
@@ -452,11 +619,16 @@ export default function App() {
         onClose={() => setShowExportModal(false)}
         pins={pins}
         quickLinks={quickLinks}
+        collections={collections}
         onImportSuccess={(imported) => {
           sync(imported.pins)
           if (imported.quickLinks) {
             setQuickLinks(imported.quickLinks)
             saveQuickLinks(imported.quickLinks)
+          }
+          if (imported.collections) {
+            setCollections(imported.collections)
+            saveCollections(imported.collections)
           }
         }}
       />

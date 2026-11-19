@@ -14,9 +14,11 @@ import {
   FileText,
   Sparkles,
 } from 'lucide-react'
-import type { Pin, Status } from '../types'
+import type { Pin, Status, PlaylistPart } from '../types'
 import { extractYouTubeId, timecodeToSeconds, uid, buildYouTubeTimecodeUrl } from '../utils'
 import { PlatformBadge, StatusBadge } from './Badges'
+import { PinPoster } from './PinPoster'
+import { ListVideo, CheckSquare, Square } from 'lucide-react'
 
 interface PlayerModalProps {
   pin: Pin | null
@@ -25,7 +27,7 @@ interface PlayerModalProps {
   onUpdatePin: (updated: Pin) => void
 }
 
-type SidebarTab = 'timecodes' | 'notes'
+type SidebarTab = 'timecodes' | 'notes' | 'parts'
 
 export const PlayerModal: React.FC<PlayerModalProps> = ({
   pin,
@@ -36,6 +38,8 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({
   if (!pin) return null
 
   const [activeTab, setActiveTab] = useState<SidebarTab>('timecodes')
+  const [activeUrl, setActiveUrl] = useState(pin.url)
+  const [activePartTitle, setActivePartTitle] = useState<string | null>(null)
   const [activeTimecode, setActiveTimecode] = useState(pin.timecode || '')
   const [iframeKey, setIframeKey] = useState(0) // increments to reload player at new timestamp
   const [notesText, setNotesText] = useState(pin.notes || pin.note || '')
@@ -45,11 +49,31 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({
   const [showAddMarker, setShowAddMarker] = useState(false)
   const notesTextareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const ytId = extractYouTubeId(pin.url)
+  const ytId = extractYouTubeId(activeUrl)
   const startSec = activeTimecode ? timecodeToSeconds(activeTimecode) : 0
   const embedUrl = ytId
     ? `https://www.youtube.com/embed/${ytId}?autoplay=1${startSec > 0 ? `&start=${startSec}` : ''}`
     : null
+
+  const handleSelectPart = (part: PlaylistPart) => {
+    setActiveUrl(part.url)
+    setActivePartTitle(part.title)
+    if (part.timecode) {
+      setActiveTimecode(part.timecode)
+    }
+    setIframeKey((prev) => prev + 1)
+  }
+
+  const handleTogglePartCompleted = (partId: string) => {
+    const updatedParts = (pin.parts || []).map((p) =>
+      p.id === partId ? { ...p, isCompleted: !p.isCompleted } : p,
+    )
+    onUpdatePin({
+      ...pin,
+      parts: updatedParts,
+      updatedAt: new Date().toISOString(),
+    })
+  }
 
   // Auto-save notes on change
   const handleNotesChange = (val: string) => {
@@ -201,6 +225,11 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({
                 <PlatformBadge platform={pin.platform} />
                 <h3 className="text-sm sm:text-base font-semibold text-white truncate max-w-md sm:max-w-xl">
                   {pin.title}
+                  {activePartTitle && (
+                    <span className="text-xs text-[#f3e5ab] font-normal ml-2">
+                      • {activePartTitle}
+                    </span>
+                  )}
                 </h3>
                 <StatusBadge status={pin.status} />
               </div>
@@ -255,13 +284,7 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({
                         />
                       ) : (
                         <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center bg-[#07090e]">
-                          {pin.thumbnailUrl || pin.customThumbnailUrl ? (
-                            <img
-                              src={pin.customThumbnailUrl || pin.thumbnailUrl}
-                              alt=""
-                              className="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm"
-                            />
-                          ) : null}
+                          <PinPoster pin={pin} className="absolute inset-0 w-full h-full opacity-30 blur-sm pointer-events-none" />
                           <div className="relative z-10 space-y-3 max-w-md">
                             <Sparkles size={36} className="mx-auto text-[#f3e5ab]" />
                             <h4 className="text-base font-semibold text-white">
@@ -431,6 +454,30 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({
                     <FileText size={13} />
                     <span>Конспект</span>
                   </button>
+
+                  {pin.parts && pin.parts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('parts')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        activeTab === 'parts'
+                          ? 'btn-rose text-[#ff2a85] shadow-sm'
+                          : 'text-white/40 hover:text-white'
+                      }`}
+                    >
+                      <ListVideo size={13} />
+                      <span>Части</span>
+                      <span
+                        className="px-1.5 py-0.2 rounded text-[10px] mono"
+                        style={{
+                          backgroundColor:
+                            activeTab === 'parts' ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.06)',
+                        }}
+                      >
+                        {pin.parts.filter((p) => p.isCompleted).length}/{pin.parts.length}
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Tab 1: Таймкоды (Список маркеров + быстрый переход + добавление) */}
@@ -603,6 +650,88 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({
                       >
                         Вставить метку [{activeTimecode || '00:00:00'}]
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 3: Части / Плейлист */}
+                {activeTab === 'parts' && pin.parts && (
+                  <div className="space-y-3 flex-1 flex flex-col justify-between">
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span
+                          className="text-[10px] text-white/40 uppercase tracking-wider mono"
+                        >
+                          Части / Серии ({pin.parts.filter((p) => p.isCompleted).length}/{pin.parts.length})
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                        {pin.parts.map((part, idx) => {
+                          const isCurrent = activeUrl === part.url
+                          return (
+                            <div
+                              key={part.id}
+                              className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
+                                isCurrent
+                                  ? 'bg-[rgba(243,229,171,0.08)] border-[#f3e5ab]/30'
+                                  : 'bg-white/[0.02] border-white/5 hover:border-white/15 hover:bg-white/[0.04]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePartCompleted(part.id)}
+                                  className="text-white/40 hover:text-white cursor-pointer shrink-0"
+                                  title={part.isCompleted ? 'Отметить непросмотренным' : 'Отметить просмотренным'}
+                                >
+                                  {part.isCompleted ? (
+                                    <CheckSquare size={16} className="text-emerald-400" />
+                                  ) : (
+                                    <Square size={16} />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectPart(part)}
+                                  className="min-w-0 text-left flex-1 cursor-pointer"
+                                  title="Запустить эту часть в плеере"
+                                >
+                                  <p
+                                    className={`text-xs font-medium truncate ${
+                                      part.isCompleted
+                                        ? 'line-through text-white/40'
+                                        : isCurrent
+                                        ? 'text-[#f3e5ab] font-semibold'
+                                        : 'text-white/80'
+                                    }`}
+                                  >
+                                    <span className="mono text-[10px] mr-1.5 opacity-60">#{idx + 1}</span>
+                                    {part.title}
+                                  </p>
+                                  {part.timecode && (
+                                    <span className="text-[10px] mono text-white/40">{part.timecode}</span>
+                                  )}
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSelectPart(part)}
+                                className={`px-2 py-1 rounded text-[10px] font-semibold mono cursor-pointer shrink-0 ${
+                                  isCurrent
+                                    ? 'btn-gold text-[#f3e5ab]'
+                                    : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
+                                }`}
+                              >
+                                {isCurrent ? 'Сейчас' : 'Включить'}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-white/30 text-center pt-2 border-t border-white/5">
+                      Клик переключает активное видео прямо в плеере
                     </div>
                   </div>
                 )}

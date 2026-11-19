@@ -1,15 +1,19 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Filter, BookOpen } from 'lucide-react'
-import type { Pin, Category, StatusFilter, HistoryPeriod } from '../types'
+import { Search, X, Plus, Filter, BookOpen, Settings2, Zap, ArrowRight } from 'lucide-react'
+import type { Pin, Category, StatusFilter, HistoryPeriod, Collection, PlaylistPart } from '../types'
 import { HISTORY_PERIOD_LABELS } from '../types'
 import { PinCard } from './PinCard'
 
 interface PinGridProps {
   pins: Pin[]
   allActivePins: Pin[]
+  collections: Collection[]
   category: Category
   onCategoryChange: (cat: Category) => void
+  onOpenAddCollection: () => void
+  onOpenEditCollection: (col: Collection) => void
+  onQuickAdd: (url: string, category: string) => void
   statusFilter: StatusFilter
   onStatusFilterChange: (st: StatusFilter) => void
   historyPeriodFilter?: HistoryPeriod
@@ -24,18 +28,13 @@ interface PinGridProps {
   onUpdateEpisode: (id: string, newEp: number) => void
   onUpdateTimecode: (id: string, newTc: string) => void
   onUpdateRating: (id: string, newRating: number) => void
+  onTogglePart?: (pinId: string, partId: string) => void
+  onPlayPart?: (pin: Pin, part: PlaylistPart) => void
   onMoveUp: (id: string) => void
   onMoveDown: (id: string) => void
   onOpenAddModal: () => void
   allTags: string[]
 }
-
-const CATEGORY_CONFIG: { value: Category; label: string }[] = [
-  { value: 'all', label: 'Все закрепы' },
-  { value: 'history', label: 'История (ЕГЭ / Олимп)' },
-  { value: 'anime', label: 'Аниме и Сериалы' },
-  { value: 'video', label: 'Видео / Эссе' },
-]
 
 const STATUS_CONFIG: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'Все' },
@@ -47,8 +46,12 @@ const STATUS_CONFIG: { value: StatusFilter; label: string }[] = [
 export const PinGrid: React.FC<PinGridProps> = ({
   pins,
   allActivePins,
+  collections,
   category,
   onCategoryChange,
+  onOpenAddCollection,
+  onOpenEditCollection,
+  onQuickAdd,
   statusFilter,
   onStatusFilterChange,
   historyPeriodFilter,
@@ -63,15 +66,20 @@ export const PinGrid: React.FC<PinGridProps> = ({
   onUpdateEpisode,
   onUpdateTimecode,
   onUpdateRating,
+  onTogglePart,
+  onPlayPart,
   onMoveUp,
   onMoveDown,
   onOpenAddModal,
   allTags,
 }) => {
+  const [quickUrl, setQuickUrl] = useState('')
+  const [isQuickAdding, setIsQuickAdding] = useState(false)
+
   // Counts per category for the tabs
-  const getCategoryCount = (cat: Category): number => {
-    if (cat === 'all') return allActivePins.length
-    return allActivePins.filter((p) => p.category === cat).length
+  const getCategoryCount = (catId: Category): number => {
+    if (catId === 'all') return allActivePins.length
+    return allActivePins.filter((p) => p.category === catId).length
   }
 
   // Counts per status
@@ -83,44 +91,114 @@ export const PinGrid: React.FC<PinGridProps> = ({
     return allActivePins.filter((p) => p.status === st).length
   }
 
+  const handleQuickSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!quickUrl.trim()) return
+    setIsQuickAdding(true)
+    const targetCategory = category === 'all' ? (collections[0]?.id || 'video') : category
+    onQuickAdd(quickUrl.trim(), targetCategory)
+    setQuickUrl('')
+    setTimeout(() => setIsQuickAdding(false), 1200)
+  }
+
+  const activeCollection = collections.find((c) => c.id === category)
+
   return (
     <div className="space-y-6">
-      {/* Category Tabs with Count Badges */}
+      {/* Dynamic Category Tabs with Count Badges & "+ Новый раздел" */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
-        {/* Category Tabs */}
+        {/* Category Tabs Scrollable */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {CATEGORY_CONFIG.map((tab) => {
-            const active = category === tab.value
-            const count = getCategoryCount(tab.value)
+          {/* "Все закрепы" Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              onCategoryChange('all')
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              category === 'all'
+                ? 'btn-gold text-[#f3e5ab] shadow-md'
+                : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
+            }`}
+          >
+            <span>Все закрепы</span>
+            <span
+              className="px-1.5 py-0.2 rounded-md text-[10px] mono font-bold"
+              style={{
+                backgroundColor: category === 'all' ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.06)',
+                color: category === 'all' ? '#f3e5ab' : 'rgba(255,255,255,0.4)',
+              }}
+            >
+              {String(getCategoryCount('all')).padStart(2, '0')}
+            </span>
+          </button>
+
+          {/* Dynamic Collections Tabs */}
+          {collections.map((col) => {
+            const active = category === col.id
+            const count = getCategoryCount(col.id)
             return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => {
-                  onCategoryChange(tab.value)
-                  if (tab.value !== 'history' && tab.value !== 'all') {
-                    onHistoryPeriodFilterChange(undefined)
-                  }
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              <div
+                key={col.id}
+                className={`flex items-center rounded-xl transition-all ${
                   active
                     ? 'btn-gold text-[#f3e5ab] shadow-md'
                     : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
                 }`}
               >
-                <span>{tab.label}</span>
-                <span
-                  className="px-1.5 py-0.2 rounded-md text-[10px] mono font-bold"
-                  style={{
-                    backgroundColor: active ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.06)',
-                    color: active ? '#f3e5ab' : 'rgba(255,255,255,0.4)',
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCategoryChange(col.id)
+                    if (col.id !== 'history') {
+                      onHistoryPeriodFilterChange(undefined)
+                    }
                   }}
+                  className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold whitespace-nowrap cursor-pointer"
                 >
-                  {String(count).padStart(2, '0')}
-                </span>
-              </button>
+                  {col.emoji && <span>{col.emoji}</span>}
+                  <span>{col.name}</span>
+                  <span
+                    className="px-1.5 py-0.2 rounded-md text-[10px] mono font-bold"
+                    style={{
+                      backgroundColor: active ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.06)',
+                      color: active ? '#f3e5ab' : 'rgba(255,255,255,0.4)',
+                    }}
+                  >
+                    {String(count).padStart(2, '0')}
+                  </span>
+                </button>
+
+                {/* Edit / Configure button for custom collection */}
+                {!col.isDefault && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenEditCollection(col)
+                    }}
+                    className={`p-1.5 mr-1 rounded-lg transition-colors cursor-pointer ${
+                      active ? 'text-[#f3e5ab]/70 hover:text-[#f3e5ab]' : 'text-white/30 hover:text-white'
+                    }`}
+                    title="Настроить или удалить раздел"
+                  >
+                    <Settings2 size={12} />
+                  </button>
+                )}
+              </div>
             )
           })}
+
+          {/* "+ Новый раздел" button */}
+          <button
+            type="button"
+            onClick={onOpenAddCollection}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-[#f3e5ab]/90 hover:text-[#f3e5ab] border border-dashed border-[#f3e5ab]/30 hover:border-[#f3e5ab]/60 transition-all cursor-pointer"
+            title="Создать новый раздел / коллекцию"
+          >
+            <Plus size={13} />
+            <span>+ Новый раздел</span>
+          </button>
         </div>
 
         {/* Search input */}
@@ -137,7 +215,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
             <button
               type="button"
               onClick={() => onSearchChange('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white cursor-pointer"
             >
               <X size={13} />
             </button>
@@ -202,6 +280,46 @@ export const PinGrid: React.FC<PinGridProps> = ({
         </div>
       )}
 
+      {/* Inline Quick-Add Bar (Вставил ссылку -> нажал Enter -> закреп создался) */}
+      <form
+        onSubmit={handleQuickSubmit}
+        className="relative flex items-center gap-2 p-1.5 pl-3.5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 focus-within:border-[#f3e5ab]/50 transition-all"
+      >
+        <div className="flex items-center gap-2 text-white/40 shrink-0">
+          <Zap size={14} className="text-[#f3e5ab]" />
+          <span className="text-xs hidden sm:inline text-white/50">Быстрое добавление:</span>
+        </div>
+        <input
+          type="text"
+          value={quickUrl}
+          onChange={(e) => setQuickUrl(e.target.value)}
+          placeholder={
+            category === 'all'
+              ? 'Вставьте ссылку и нажмите Enter для мгновенного добавления...'
+              : `Вставьте ссылку в раздел «${activeCollection?.name || category}» и нажмите Enter...`
+          }
+          className="flex-1 bg-transparent border-0 text-xs text-white placeholder:text-white/30 focus:outline-none py-1.5"
+        />
+        <button
+          type="submit"
+          disabled={!quickUrl.trim()}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+            quickUrl.trim()
+              ? 'btn-gold text-[#f3e5ab] shadow-md'
+              : 'bg-white/5 text-white/20 cursor-not-allowed'
+          }`}
+        >
+          {isQuickAdding ? (
+            <span className="text-green-400">Добавлено!</span>
+          ) : (
+            <>
+              <span>Добавить</span>
+              <ArrowRight size={12} />
+            </>
+          )}
+        </button>
+      </form>
+
       {/* Status Filters & Tag Cloud Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Status filters */}
@@ -222,9 +340,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
                 }`}
               >
                 <span>{sf.label}</span>
-                <span
-                  className="text-[10px] mono opacity-60"
-                >
+                <span className="text-[10px] mono opacity-60">
                   {count}
                 </span>
               </button>
@@ -299,6 +415,8 @@ export const PinGrid: React.FC<PinGridProps> = ({
                 onUpdateEpisode={onUpdateEpisode}
                 onUpdateTimecode={onUpdateTimecode}
                 onUpdateRating={onUpdateRating}
+                onTogglePart={onTogglePart}
+                onPlayPart={onPlayPart}
                 onMoveUp={onMoveUp}
                 onMoveDown={onMoveDown}
                 canMoveUp={index > 0}

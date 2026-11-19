@@ -1,10 +1,12 @@
-import type { Pin, AppData, QuickLink } from '../types'
+import type { Pin, AppData, QuickLink, Collection } from '../types'
+import { DEFAULT_COLLECTIONS } from '../types'
 import { uid } from '../utils'
 
 const STORAGE_KEY = 'cp_data'
 const LEGACY_KEY = 'pinvault_data'
 const DOCK_KEY = 'cp_quickdock'
-const VERSION = '2.0.0'
+const COLLECTIONS_KEY = 'cp_collections'
+const VERSION = '2.1.0'
 
 /* ───── Migration ───── */
 function migrateLegacy(): Pin[] | null {
@@ -46,11 +48,30 @@ export function saveQuickLinks(links: QuickLink[]): void {
   localStorage.setItem(DOCK_KEY, JSON.stringify(links))
 }
 
+/* ───── Collections / Sections ───── */
+export function loadCollections(): Collection[] {
+  try {
+    const raw = localStorage.getItem(COLLECTIONS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as Collection[]
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+    return DEFAULT_COLLECTIONS
+  } catch {
+    return DEFAULT_COLLECTIONS
+  }
+}
+
+export function saveCollections(collections: Collection[]): void {
+  localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections))
+}
+
 /* ───── Export / Import ───── */
-export function exportToJson(pins: Pin[], quickLinks: QuickLink[]): void {
+export function exportToJson(pins: Pin[], quickLinks: QuickLink[], collections?: Collection[]): void {
   const data: AppData = {
     pins: pins.filter(p => p.status !== 'deleted'),
     quickLinks,
+    collections,
     exportedAt: new Date().toISOString(),
     version: VERSION,
   }
@@ -62,16 +83,17 @@ export function exportToJson(pins: Pin[], quickLinks: QuickLink[]): void {
   URL.revokeObjectURL(a.href)
 }
 
-export function exportToClipboard(pins: Pin[]): string {
+export function exportToClipboard(pins: Pin[], collections?: Collection[]): string {
   const data: AppData = {
     pins: pins.filter(p => p.status !== 'deleted'),
+    collections,
     exportedAt: new Date().toISOString(),
     version: VERSION,
   }
   return JSON.stringify(data)
 }
 
-export function importFromJson(file: File): Promise<{ pins: Pin[]; quickLinks?: QuickLink[] }> {
+export function importFromJson(file: File): Promise<{ pins: Pin[]; quickLinks?: QuickLink[]; collections?: Collection[] }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -82,6 +104,7 @@ export function importFromJson(file: File): Promise<{ pins: Pin[]; quickLinks?: 
         resolve({
           pins: pins.map(p => ({ ...p, id: p.id || uid() })),
           quickLinks: data.quickLinks,
+          collections: data.collections,
         })
       } catch (err) { reject(err) }
     }

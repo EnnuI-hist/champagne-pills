@@ -12,19 +12,30 @@ import {
   Film,
   BookOpen,
   Tv,
+  ListPlus,
+  ListVideo,
+  Plus,
+  Trash2,
+  Layers,
 } from 'lucide-react'
-import type { Pin, Platform, ContentType, Category, HistoryPeriod, Status } from '../types'
+import type { Pin, Platform, ContentType, Category, HistoryPeriod, Status, Collection, PlaylistPart } from '../types'
 import { HISTORY_PERIOD_LABELS } from '../types'
 import { detectPlatform, extractYouTubeId, uid, guessCategory, inferContentType } from '../utils'
 import { fetchVideoMeta, youtubeHqThumb } from '../utils/metadata'
 import { compressImageToWebp, saveBlob } from '../utils/db'
 import { PlatformBadge } from './Badges'
 
+type AddMode = 'single' | 'batch' | 'playlist'
+
 interface AddPinModalProps {
   open: boolean
   onClose: () => void
   onAdd: (pin: Pin) => void
+  onAddBatch?: (pins: Pin[]) => void
   initialUrl?: string
+  collections: Collection[]
+  onOpenAddCollection?: () => void
+  activeCategory?: string
 }
 
 const CONTENT_TYPES: { value: ContentType; label: string; icon: React.ReactNode }[] = [
@@ -35,12 +46,6 @@ const CONTENT_TYPES: { value: ContentType; label: string; icon: React.ReactNode 
   { value: 'movie', label: 'Фильм', icon: <Film size={13} /> },
 ]
 
-const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'video', label: 'Видео / Эссе' },
-  { value: 'history', label: 'История (ЕГЭ / Олимп)' },
-  { value: 'anime', label: 'Аниме и Кино' },
-]
-
 const STATUSES: { value: Status; label: string }[] = [
   { value: 'watching', label: '▶ Смотрю' },
   { value: 'queued', label: 'В очереди' },
@@ -48,12 +53,26 @@ const STATUSES: { value: Status; label: string }[] = [
   { value: 'archived', label: 'В архив' },
 ]
 
+interface PartDraft {
+  id: string
+  title: string
+  url: string
+  timecode?: string
+}
+
 export const AddPinModal: React.FC<AddPinModalProps> = ({
   open,
   onClose,
   onAdd,
+  onAddBatch,
   initialUrl = '',
+  collections,
+  onOpenAddCollection,
+  activeCategory,
 }) => {
+  const [mode, setMode] = useState<AddMode>('single')
+
+  // Single Pin form state
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [channelName, setChannelName] = useState('')
@@ -84,17 +103,33 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   const [urlError, setUrlError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Batch Mode State
+  const [batchUrlsText, setBatchUrlsText] = useState('')
+  const [batchCategory, setBatchCategory] = useState<Category>('video')
+  const [batchStatus, setBatchStatus] = useState<Status>('queued')
+
+  // Playlist Mode State
+  const [playlistTitle, setPlaylistTitle] = useState('')
+  const [playlistCategory, setPlaylistCategory] = useState<Category>('anime')
+  const [playlistParts, setPlaylistParts] = useState<PartDraft[]>([
+    { id: uid(), title: 'Фильм 1', url: '' },
+    { id: uid(), title: 'Фильм 2', url: '' },
+  ])
+
   const platform: Platform = url ? detectPlatform(url) : 'web'
 
   // Initialize or handle initialUrl change
   useEffect(() => {
     if (open) {
+      const defaultCat = activeCategory && activeCategory !== 'all' ? activeCategory : collections[0]?.id || 'video'
+      setCategory(defaultCat)
+      setBatchCategory(defaultCat)
+      setPlaylistCategory(defaultCat)
+
       if (initialUrl) {
         handleUrlInput(initialUrl)
       } else if (!url) {
-        // Reset defaults
         setContentType('video')
-        setCategory('video')
         setStatus('watching')
       }
     } else {
@@ -110,8 +145,14 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
       setDubStudio('')
       setRating(undefined)
       setTimecode('')
+      setBatchUrlsText('')
+      setPlaylistTitle('')
+      setPlaylistParts([
+        { id: uid(), title: 'Часть 1', url: '' },
+        { id: uid(), title: 'Часть 2', url: '' },
+      ])
     }
-  }, [open, initialUrl])
+  }, [open, initialUrl, activeCategory, collections])
 
   // Handle URL change with auto-detection & metadata fetch
   const handleUrlInput = async (val: string) => {
@@ -127,7 +168,12 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     const detectedPlat = detectPlatform(trimmed)
     const inferredCt = inferContentType(detectedPlat)
     setContentType(inferredCt)
-    setCategory(guessCategory(trimmed, inferredCt))
+
+    // Only set category if currently at default
+    const guessed = guessCategory(trimmed, inferredCt)
+    if (collections.some((c) => c.id === guessed)) {
+      setCategory(guessed)
+    }
 
     // 1. YouTube instant high-res thumbnail
     const ytId = extractYouTubeId(trimmed)
@@ -157,7 +203,6 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   const handleProcessImage = async (file: Blob) => {
     setIsCompressing(true)
     try {
-      // Compress to WebP ≤900px wide, quality 0.82
       const compressed = await compressImageToWebp(file, 900)
       const key = `poster_${uid()}`
       await saveBlob(key, compressed)
@@ -196,17 +241,20 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
       }
     }
 
-    // If paste is text and url is empty, auto-paste into URL
-    const text = e.clipboardData.getData('text')
-    if (text && !url && /^https?:\/\//i.test(text.trim())) {
-      handleUrlInput(text.trim())
+    // If paste is text and url is empty in single mode, auto-paste into URL
+    if (mode === 'single') {
+      const text = e.clipboardData.getData('text')
+      if (text && !url && /^https?:\/\//i.test(text.trim())) {
+        handleUrlInput(text.trim())
+      }
     }
   }
 
   const isEpisodic = contentType === 'anime' || contentType === 'series'
   const isLecture = contentType === 'lecture' || category === 'history'
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Submit Single Pin
+  const handleSingleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!url.trim()) {
       setUrlError('Вставьте ссылку на медиа')
@@ -261,6 +309,121 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     onClose()
   }
 
+  // Submit Batch Links
+  const handleBatchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const lines = batchUrlsText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+
+    if (lines.length === 0) {
+      alert('Вставьте хотя бы одну ссылку в поле ввода')
+      return
+    }
+
+    const now = new Date().toISOString()
+    const generatedPins: Pin[] = lines.map((link) => {
+      const plat = detectPlatform(link)
+      const ytId = extractYouTubeId(link)
+      let parsedTitle = link
+      try {
+        const u = new URL(link)
+        parsedTitle = u.pathname.split('/').filter(Boolean).pop() || u.hostname
+      } catch {
+        // fallback
+      }
+      if (ytId) {
+        parsedTitle = `YouTube • ${ytId}`
+      }
+
+      return {
+        id: uid(),
+        title: parsedTitle,
+        url: link,
+        platform: plat,
+        contentType: 'video',
+        category: batchCategory,
+        status: batchStatus,
+        thumbnailUrl: ytId ? youtubeHqThumb(ytId) : undefined,
+        isPinned: false,
+        createdAt: now,
+        updatedAt: now,
+      }
+    })
+
+    if (onAddBatch) {
+      onAddBatch(generatedPins)
+    } else {
+      generatedPins.forEach((p) => onAdd(p))
+    }
+    onClose()
+  }
+
+  // Submit Playlist / Multi-part Collection
+  const handlePlaylistSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!playlistTitle.trim()) {
+      alert('Укажите название плейлиста или саги')
+      return
+    }
+    const validParts = playlistParts.filter((p) => p.url.trim().length > 0)
+    if (validParts.length === 0) {
+      alert('Добавьте хотя бы одну часть со ссылкой')
+      return
+    }
+
+    const now = new Date().toISOString()
+    const firstUrl = validParts[0].url.trim()
+    const plat = detectPlatform(firstUrl)
+    const ytId = extractYouTubeId(firstUrl)
+
+    const finalParts: PlaylistPart[] = validParts.map((p, idx) => ({
+      id: p.id || uid(),
+      title: p.title.trim() || `Часть ${idx + 1}`,
+      url: p.url.trim(),
+      isCompleted: false,
+      timecode: p.timecode?.trim() || undefined,
+    }))
+
+    const newPin: Pin = {
+      id: uid(),
+      title: playlistTitle.trim(),
+      url: firstUrl,
+      platform: plat,
+      contentType: 'series',
+      category: playlistCategory,
+      status: 'watching',
+      parts: finalParts,
+      thumbnailUrl: ytId ? youtubeHqThumb(ytId) : undefined,
+      customThumbnailUrl: coverPreview || undefined,
+      thumbnailDbKey: thumbDbKey,
+      isPinned: true,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    onAdd(newPin)
+    onClose()
+  }
+
+  const addPlaylistPart = () => {
+    setPlaylistParts((prev) => [
+      ...prev,
+      { id: uid(), title: `Часть ${prev.length + 1}`, url: '' },
+    ])
+  }
+
+  const removePlaylistPart = (id: string) => {
+    setPlaylistParts((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  const updatePlaylistPart = (id: string, field: 'title' | 'url' | 'timecode', val: string) => {
+    setPlaylistParts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, [field]: val } : p)),
+    )
+  }
+
   return (
     <AnimatePresence>
       {open && (
@@ -269,7 +432,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md"
           onClick={onClose}
           onPaste={handleModalPaste}
         >
@@ -279,403 +442,475 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.96 }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="glass-modal w-full sm:max-w-2xl rounded-t-3xl sm:rounded-2xl overflow-hidden border border-white/10 max-h-[92vh] flex flex-col shadow-2xl"
+            className="glass-modal w-full sm:max-w-2xl rounded-t-3xl sm:rounded-2xl overflow-hidden border border-white/10 max-h-[92vh] flex flex-col shadow-2xl bg-[#0b0d13]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 px-6 border-b border-white/[0.08] shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl btn-gold">
-                  <Link2 size={16} />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                    Создать закреп
-                    {isLoadingMeta && (
-                      <span className="flex items-center gap-1 text-[11px] text-[#f3e5ab] font-normal">
-                        <Sparkles size={12} className="animate-spin text-[#ff2a85]" />
-                        Автопарсинг...
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-xs text-white/40">
-                    Вставьте ссылку или картинку через Ctrl+V
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Form Scrollable Body */}
-            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
-              {/* URL Input */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label
-                    className="text-[10px] text-white/40 uppercase tracking-wider"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Ссылка на медиа *
-                  </label>
-                  {url && <PlatformBadge platform={platform} />}
-                </div>
-
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => handleUrlInput(e.target.value)}
-                    placeholder="https://youtube.com/watch?v=... или любая ссылка"
-                    className={`w-full bg-white/[0.03] border rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/20 transition-all ${
-                      urlError ? 'border-red-500/50' : 'border-white/10 focus:border-[#f3e5ab]'
-                    }`}
-                    autoFocus
-                  />
-                </div>
-                {urlError && (
-                  <div className="flex items-center gap-1 mt-1 text-xs text-red-400">
-                    <AlertCircle size={12} /> {urlError}
+            {/* Header with Mode Switcher */}
+            <div className="p-4 px-6 border-b border-white/[0.08] shrink-0 space-y-3 bg-white/[0.01]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl btn-gold text-[#f3e5ab]">
+                    <Link2 size={16} />
                   </div>
-                )}
-              </div>
-
-              {/* Title & Channel */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label
-                    className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Название *
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Название видео, лекции или тайтла"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/20 focus:border-[#f3e5ab] transition-all"
-                  />
+                  <div>
+                    <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                      Добавить в коллекцию
+                      {isLoadingMeta && (
+                        <span className="flex items-center gap-1 text-[11px] text-[#f3e5ab] font-normal">
+                          <Sparkles size={12} className="animate-spin text-[#ff2a85]" />
+                          Автопарсинг...
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-white/40">
+                      Вставьте ссылку, список или создайте многосерийный закреп
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label
-                    className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Канал / Автор
-                  </label>
-                  <input
-                    type="text"
-                    value={channelName}
-                    onChange={(e) => setChannelName(e.target.value)}
-                    placeholder="Имя автора"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/20 focus:border-[#f3e5ab] transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Poster Dropzone (Drag-and-Drop + Ctrl+V + WebP compression) */}
-              <div>
-                <label
-                  className="text-[10px] text-white/40 mb-1.5 flex items-center justify-between uppercase tracking-wider"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                <button
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
                 >
-                  <span>Обложка / Постер (WebP в IndexedDB)</span>
-                  <span className="text-[#f3e5ab]/80 flex items-center gap-1">
-                    <ImageIcon size={11} /> Вставь картинку через Ctrl+V
-                  </span>
-                </label>
+                  <X size={18} />
+                </button>
+              </div>
 
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    setIsDragging(true)
-                  }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleDrop}
-                  className={`relative p-3 rounded-2xl border-2 border-dashed transition-all flex flex-col sm:flex-row items-center gap-3 ${
-                    isDragging
-                      ? 'border-[#ff2a85] bg-[#ff2a85]/5'
-                      : 'border-white/10 hover:border-white/20 bg-white/[0.02]'
+              {/* Mode Switcher Tabs */}
+              <div className="flex items-center p-1 rounded-xl bg-white/[0.03] border border-white/10 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setMode('single')}
+                  className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    mode === 'single'
+                      ? 'btn-gold text-[#f3e5ab] shadow-sm'
+                      : 'text-white/40 hover:text-white'
                   }`}
                 >
-                  {/* Thumbnail Preview if present */}
-                  {coverPreview || autoThumbUrl ? (
-                    <div className="relative w-36 aspect-video rounded-xl overflow-hidden shrink-0 border border-white/10 bg-black">
-                      <img
-                        src={coverPreview || autoThumbUrl || ''}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCoverPreview(null)
-                          setAutoThumbUrl(null)
-                          setThumbDbKey(undefined)
-                        }}
-                        className="absolute top-1 right-1 p-1 rounded-md bg-black/60 text-white/70 hover:text-white"
-                        title="Удалить обложку"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white/30 shrink-0">
-                      <ImageIcon size={22} />
+                  <Layers size={13} />
+                  <span>Одиночный закреп</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('batch')}
+                  className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    mode === 'batch'
+                      ? 'btn-rose text-[#ff2a85] shadow-sm'
+                      : 'text-white/40 hover:text-white'
+                  }`}
+                >
+                  <ListPlus size={13} />
+                  <span>Быстрый список</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('playlist')}
+                  className={`flex-1 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    mode === 'playlist'
+                      ? 'bg-purple-600/30 text-purple-300 border border-purple-500/30 shadow-sm'
+                      : 'text-white/40 hover:text-white'
+                  }`}
+                >
+                  <ListVideo size={13} />
+                  <span>Плейлист / Части</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ───── MODE 1: SINGLE PIN FORM ───── */}
+            {mode === 'single' && (
+              <form onSubmit={handleSingleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+                {/* URL Input */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label
+                      className="text-[10px] text-white/40 uppercase tracking-wider"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Ссылка на медиа *
+                    </label>
+                    {url && <PlatformBadge platform={platform} />}
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={url}
+                      onChange={(e) => handleUrlInput(e.target.value)}
+                      placeholder="https://youtube.com/watch?v=... или любая ссылка"
+                      className={`w-full bg-white/[0.03] border rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/20 transition-all ${
+                        urlError ? 'border-red-500/50' : 'border-white/10 focus:border-[#f3e5ab]'
+                      }`}
+                      autoFocus
+                    />
+                  </div>
+                  {urlError && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-red-400">
+                      <AlertCircle size={12} /> {urlError}
                     </div>
                   )}
-
-                  <div className="flex-1 text-center sm:text-left">
-                    <p className="text-xs text-white/80 font-medium">
-                      {isCompressing
-                        ? 'Сжатие постера в WebP...'
-                        : coverPreview
-                        ? 'Кастомная обложка сжата и сохранена'
-                        : autoThumbUrl
-                        ? 'Обложка подтянута автоматически из видео'
-                        : 'Перетащите постер сюда или нажмите для выбора'}
-                    </p>
-                    <p className="text-[11px] text-white/30 mt-0.5">
-                      Автоматическое сжатие до 900px в легкий WebP без потери качества
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-xl btn-gold text-xs font-semibold shrink-0 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Upload size={12} /> Выбрать файл
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) handleProcessImage(f)
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Content Type & Category Selector */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                {/* Content Type */}
-                <div>
-                  <label
-                    className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Тип контента
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CONTENT_TYPES.map((ct) => {
-                      const active = contentType === ct.value
-                      return (
-                        <button
-                          key={ct.value}
-                          type="button"
-                          onClick={() => {
-                            setContentType(ct.value)
-                            setCategory(guessCategory(url, ct.value))
-                          }}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                            active
-                              ? 'btn-gold text-[#f3e5ab] font-semibold'
-                              : 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          {ct.icon}
-                          <span>{ct.label}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
                 </div>
 
-                {/* Category */}
-                <div>
-                  <label
-                    className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Раздел
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CATEGORIES.map((cat) => {
-                      const active = category === cat.value
-                      return (
-                        <button
-                          key={cat.value}
-                          type="button"
-                          onClick={() => setCategory(cat.value)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                            active
-                              ? 'btn-rose text-[#ff2a85] font-semibold'
-                              : 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          {cat.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* History Sub-period selector (when category is 'history') */}
-              {category === 'history' && (
-                <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-                  <label
-                    className="text-[10px] text-[#f3e5ab] uppercase tracking-wider block"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Подпериод истории (ЕГЭ / Олимп):
-                  </label>
-                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto scrollbar-none">
-                    {(Object.keys(HISTORY_PERIOD_LABELS) as HistoryPeriod[]).map((periodKey) => {
-                      const active = historyPeriod === periodKey
-                      return (
-                        <button
-                          key={periodKey}
-                          type="button"
-                          onClick={() =>
-                            setHistoryPeriod(active ? undefined : periodKey)
-                          }
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                            active
-                              ? 'bg-[rgba(243,229,171,0.15)] text-[#f3e5ab] border-[rgba(243,229,171,0.3)] shadow-sm'
-                              : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'
-                          }`}
-                        >
-                          {HISTORY_PERIOD_LABELS[periodKey]}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Episodic / Lecture Trackers */}
-              {isEpisodic ? (
-                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
-                  <div>
+                {/* Title & Channel */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
                     <label
-                      className="text-[10px] text-white/40 mb-1 block"
+                      className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
-                      Серия
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={currentEp}
-                      onChange={(e) => setCurrentEp(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-center text-sm font-semibold text-white mono"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      className="text-[10px] text-white/40 mb-1 block"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                    >
-                      Всего серий
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={totalEp}
-                      onChange={(e) => setTotalEp(e.target.value)}
-                      placeholder="25"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-center text-sm font-semibold text-white mono"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      className="text-[10px] text-white/40 mb-1 block"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                    >
-                      Студия / Озвучка
+                      Название *
                     </label>
                     <input
                       type="text"
-                      value={dubStudio}
-                      onChange={(e) => setDubStudio(e.target.value)}
-                      placeholder="AniDUB / Дубляж"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Название видео, лекции или тайтла"
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/20 focus:border-[#f3e5ab] transition-all"
                     />
                   </div>
                   <div>
                     <label
-                      className="text-[10px] text-white/40 mb-1 block"
+                      className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
-                      Оценка (1-10)
+                      Канал / Автор
                     </label>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                    <input
+                      type="text"
+                      value={channelName}
+                      onChange={(e) => setChannelName(e.target.value)}
+                      placeholder="Имя автора"
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/20 focus:border-[#f3e5ab] transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Poster Dropzone (Drag-and-Drop + Ctrl+V + WebP compression) */}
+                <div>
+                  <label
+                    className="text-[10px] text-white/40 mb-1.5 flex items-center justify-between uppercase tracking-wider"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    <span>Обложка / Постер (WebP в IndexedDB)</span>
+                    <span className="text-[#f3e5ab]/80 flex items-center gap-1">
+                      <ImageIcon size={11} /> Вставь картинку через Ctrl+V
+                    </span>
+                  </label>
+
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setIsDragging(true)
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    className={`relative p-3 rounded-2xl border-2 border-dashed transition-all flex flex-col sm:flex-row items-center gap-3 ${
+                      isDragging
+                        ? 'border-[#ff2a85] bg-[#ff2a85]/5'
+                        : 'border-white/10 hover:border-white/20 bg-white/[0.02]'
+                    }`}
+                  >
+                    {/* Thumbnail Preview if present */}
+                    {coverPreview || autoThumbUrl ? (
+                      <div className="relative w-36 aspect-video rounded-xl overflow-hidden shrink-0 border border-white/10 bg-black">
+                        <img
+                          src={coverPreview || autoThumbUrl || ''}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
                         <button
-                          key={star}
                           type="button"
-                          onClick={() => setRating(rating === star ? undefined : star)}
-                          className="p-0.5 text-white/20 hover:text-[#f3e5ab]"
-                          style={{
-                            color: rating && rating >= star ? '#f3e5ab' : undefined,
+                          onClick={() => {
+                            setCoverPreview(null)
+                            setAutoThumbUrl(null)
+                            setThumbDbKey(undefined)
                           }}
+                          className="absolute top-1 right-1 p-1 rounded-md bg-black/60 text-white/70 hover:text-white cursor-pointer"
+                          title="Удалить обложку"
                         >
-                          <Star
-                            size={12}
-                            fill={rating && rating >= star ? 'currentColor' : 'none'}
-                          />
+                          <X size={12} />
                         </button>
-                      ))}
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white/30 shrink-0">
+                        <ImageIcon size={22} />
+                      </div>
+                    )}
+
+                    <div className="flex-1 text-center sm:text-left">
+                      <p className="text-xs text-white/80 font-medium">
+                        {isCompressing
+                          ? 'Сжатие постера в WebP...'
+                          : coverPreview
+                          ? 'Кастомная обложка сжата и сохранена'
+                          : autoThumbUrl
+                          ? 'Обложка подтянута автоматически из видео'
+                          : 'Перетащите постер сюда или нажмите для выбора'}
+                      </p>
+                      <p className="text-[11px] text-white/30 mt-0.5">
+                        Автоматическое сжатие до 900px в легкий WebP без потери качества
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-xl btn-gold text-xs font-semibold shrink-0 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Upload size={12} /> Выбрать файл
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (f) handleProcessImage(f)
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Content Type & Category Selector */}
+                <div className="space-y-4 pt-1">
+                  {/* Category / Section Selection with inline "+ Новый раздел" */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label
+                        className="text-[10px] text-white/40 uppercase tracking-wider"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Раздел / Коллекция
+                      </label>
+                      {onOpenAddCollection && (
+                        <button
+                          type="button"
+                          onClick={onOpenAddCollection}
+                          className="text-[11px] text-[#f3e5ab] hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                        >
+                          <Plus size={12} />
+                          <span>+ Создать раздел</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {collections.map((cat) => {
+                        const active = category === cat.id
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setCategory(cat.id)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                              active
+                                ? 'btn-rose text-[#ff2a85] font-semibold'
+                                : 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
+                            }`}
+                          >
+                            {cat.emoji && <span>{cat.emoji}</span>}
+                            <span>{cat.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Content Type */}
+                  <div>
+                    <label
+                      className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Тип контента
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {CONTENT_TYPES.map((ct) => {
+                        const active = contentType === ct.value
+                        return (
+                          <button
+                            key={ct.value}
+                            type="button"
+                            onClick={() => {
+                              setContentType(ct.value)
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                              active
+                                ? 'btn-gold text-[#f3e5ab] font-semibold'
+                                : 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
+                            }`}
+                          >
+                            {ct.icon}
+                            <span>{ct.label}</span>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
-              ) : isLecture ? (
-                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
+
+                {/* History Sub-period selector (when category is 'history') */}
+                {category === 'history' && (
+                  <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
                     <label
-                      className="text-[10px] text-white/40 mb-1 block"
+                      className="text-[10px] text-[#f3e5ab] uppercase tracking-wider block"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
-                      Лекция №
+                      Подпериод истории (ЕГЭ / Олимп):
                     </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={lectureNum}
-                      onChange={(e) => setLectureNum(e.target.value)}
-                      placeholder="1"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-center text-sm font-semibold text-white mono"
-                    />
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto scrollbar-none">
+                      {(Object.keys(HISTORY_PERIOD_LABELS) as HistoryPeriod[]).map((periodKey) => {
+                        const active = historyPeriod === periodKey
+                        return (
+                          <button
+                            key={periodKey}
+                            type="button"
+                            onClick={() =>
+                              setHistoryPeriod(active ? undefined : periodKey)
+                            }
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                              active
+                                ? 'bg-[rgba(243,229,171,0.15)] text-[#f3e5ab] border-[rgba(243,229,171,0.3)] shadow-sm'
+                                : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'
+                            }`}
+                          >
+                            {HISTORY_PERIOD_LABELS[periodKey]}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
+                )}
+
+                {/* Episodic / Lecture Trackers */}
+                {isEpisodic ? (
+                  <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
+                    <div>
+                      <label
+                        className="text-[10px] text-white/40 mb-1 block"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Серия
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={currentEp}
+                        onChange={(e) => setCurrentEp(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-center text-sm font-semibold text-white mono"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="text-[10px] text-white/40 mb-1 block"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Всего серий
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={totalEp}
+                        onChange={(e) => setTotalEp(e.target.value)}
+                        placeholder="25"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-center text-sm font-semibold text-white mono"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="text-[10px] text-white/40 mb-1 block"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Студия / Озвучка
+                      </label>
+                      <input
+                        type="text"
+                        value={dubStudio}
+                        onChange={(e) => setDubStudio(e.target.value)}
+                        placeholder="AniDUB / Дубляж"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="text-[10px] text-white/40 mb-1 block"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Оценка (1-10)
+                      </label>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setRating(rating === star ? undefined : star)}
+                            className="p-0.5 text-white/20 hover:text-[#f3e5ab]"
+                            style={{
+                              color: rating && rating >= star ? '#f3e5ab' : undefined,
+                            }}
+                          >
+                            <Star
+                              size={12}
+                              fill={rating && rating >= star ? 'currentColor' : 'none'}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : isLecture ? (
+                  <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label
+                        className="text-[10px] text-white/40 mb-1 block"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Лекция №
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={lectureNum}
+                        onChange={(e) => setLectureNum(e.target.value)}
+                        placeholder="1"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-center text-sm font-semibold text-white mono"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="text-[10px] text-white/40 mb-1 block"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Всего в курсе
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={totalLectures}
+                        onChange={(e) => setTotalLectures(e.target.value)}
+                        placeholder="48"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-center text-sm font-semibold text-white mono"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="text-[10px] text-white/40 mb-1 block"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        Таймкод остановки
+                      </label>
+                      <input
+                        type="text"
+                        value={timecode}
+                        onChange={(e) => setTimecode(e.target.value)}
+                        placeholder="01:24:15"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-[#f3e5ab] mono"
+                      />
+                    </div>
+                  </div>
+                ) : (
                   <div>
                     <label
-                      className="text-[10px] text-white/40 mb-1 block"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                    >
-                      Всего в курсе
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={totalLectures}
-                      onChange={(e) => setTotalLectures(e.target.value)}
-                      placeholder="48"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-center text-sm font-semibold text-white mono"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      className="text-[10px] text-white/40 mb-1 block"
+                      className="text-[10px] text-white/40 mb-1 block uppercase tracking-wider"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
                       Таймкод остановки
@@ -684,62 +919,159 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                       type="text"
                       value={timecode}
                       onChange={(e) => setTimecode(e.target.value)}
-                      placeholder="01:24:15"
+                      placeholder="00:45:10 или 12:30"
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-[#f3e5ab] mono"
                     />
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <label
-                    className="text-[10px] text-white/40 mb-1 block uppercase tracking-wider"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Таймкод остановки
-                  </label>
-                  <input
-                    type="text"
-                    value={timecode}
-                    onChange={(e) => setTimecode(e.target.value)}
-                    placeholder="00:45:10 или 12:30"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-[#f3e5ab] mono"
-                  />
-                </div>
-              )}
+                )}
 
-              {/* Tags & Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Tags & Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Теги (через запятую)
+                    </label>
+                    <input
+                      type="text"
+                      value={tagsInput}
+                      onChange={(e) => setTagsInput(e.target.value)}
+                      placeholder="#олимп, #лекция, #егэ"
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-white/20 focus:border-[#f3e5ab]"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Статус
+                    </label>
+                    <div className="flex gap-1">
+                      {STATUSES.map((st) => {
+                        const active = status === st.value
+                        return (
+                          <button
+                            key={st.value}
+                            type="button"
+                            onClick={() => setStatus(st.value)}
+                            className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                              active
+                                ? 'btn-gold font-semibold text-[#f3e5ab]'
+                                : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'
+                            }`}
+                          >
+                            {st.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="pt-4 border-t border-white/[0.08] flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl btn-gold text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer"
+                  >
+                    <Check size={14} /> Создать закреп
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ───── MODE 2: BATCH LIST (Быстрый список ссылок) ───── */}
+            {mode === 'batch' && (
+              <form onSubmit={handleBatchSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
                 <div>
                   <label
                     className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
-                    Теги (через запятую)
+                    Ссылки (по одной на строке) *
                   </label>
-                  <input
-                    type="text"
-                    value={tagsInput}
-                    onChange={(e) => setTagsInput(e.target.value)}
-                    placeholder="#олимп, #лекция, #егэ"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-white/20 focus:border-[#f3e5ab]"
+                  <textarea
+                    rows={8}
+                    value={batchUrlsText}
+                    onChange={(e) => setBatchUrlsText(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/watch?v=...&#10;https://rutube.ru/video/..."
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-3 text-xs text-white placeholder:text-white/20 focus:border-[#ff2a85] font-mono leading-relaxed resize-none"
+                    autoFocus
                   />
+                  <p className="text-[11px] text-white/40 mt-1">
+                    Строки будут автоматически преобразованы в отдельные закрепы с подгруженными превью.
+                  </p>
                 </div>
 
+                {/* Batch Category selection */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label
+                      className="text-[10px] text-white/40 uppercase tracking-wider"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Поместить в раздел
+                    </label>
+                    {onOpenAddCollection && (
+                      <button
+                        type="button"
+                        onClick={onOpenAddCollection}
+                        className="text-[11px] text-[#f3e5ab] hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                      >
+                        <Plus size={12} />
+                        <span>+ Создать раздел</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {collections.map((cat) => {
+                      const active = batchCategory === cat.id
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setBatchCategory(cat.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                            active
+                              ? 'btn-rose text-[#ff2a85] font-semibold'
+                              : 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {cat.emoji && <span>{cat.emoji}</span>}
+                          <span>{cat.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Batch Status */}
                 <div>
                   <label
                     className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
-                    Статус
+                    Начальный статус
                   </label>
                   <div className="flex gap-1">
                     {STATUSES.map((st) => {
-                      const active = status === st.value
+                      const active = batchStatus === st.value
                       return (
                         <button
                           key={st.value}
                           type="button"
-                          onClick={() => setStatus(st.value)}
+                          onClick={() => setBatchStatus(st.value)}
                           className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
                             active
                               ? 'btn-gold font-semibold text-[#f3e5ab]'
@@ -752,26 +1084,169 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                     })}
                   </div>
                 </div>
-              </div>
-            </form>
 
-            {/* Footer Buttons */}
-            <div className="p-4 px-6 border-t border-white/[0.08] flex items-center justify-end gap-3 shrink-0 bg-white/[0.01]">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                className="px-5 py-2.5 rounded-xl btn-gold text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer"
-              >
-                <Check size={14} /> Создать закреп
-              </button>
-            </div>
+                {/* Footer Buttons */}
+                <div className="pt-4 border-t border-white/[0.08] flex items-center justify-between">
+                  <span className="text-xs text-white/40 mono">
+                    Найдено ссылок:{' '}
+                    {batchUrlsText.split('\n').filter((l) => l.trim().length > 0).length}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-4 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl btn-rose text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer"
+                    >
+                      <Check size={14} /> Создать пачкой
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* ───── MODE 3: PLAYLIST / MULTI-PART (Коллекция частей) ───── */}
+            {mode === 'playlist' && (
+              <form onSubmit={handlePlaylistSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+                {/* Title */}
+                <div>
+                  <label
+                    className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    Общее название плейлиста / тайтла *
+                  </label>
+                  <input
+                    type="text"
+                    value={playlistTitle}
+                    onChange={(e) => setPlaylistTitle(e.target.value)}
+                    placeholder="Например: Сага «Сумерки» (Все фильмы)"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-white/20 focus:border-purple-400"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label
+                      className="text-[10px] text-white/40 uppercase tracking-wider"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Раздел
+                    </label>
+                    {onOpenAddCollection && (
+                      <button
+                        type="button"
+                        onClick={onOpenAddCollection}
+                        className="text-[11px] text-[#f3e5ab] hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                      >
+                        <Plus size={12} />
+                        <span>+ Создать раздел</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {collections.map((cat) => {
+                      const active = playlistCategory === cat.id
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setPlaylistCategory(cat.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                            active
+                              ? 'bg-purple-600/30 text-purple-300 border-purple-500/40 font-semibold'
+                              : 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {cat.emoji && <span>{cat.emoji}</span>}
+                          <span>{cat.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Parts List */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label
+                      className="text-[10px] text-white/40 uppercase tracking-wider"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Части / Фильмы / Серии ({playlistParts.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addPlaylistPart}
+                      className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      <Plus size={12} /> Добавить часть
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {playlistParts.map((part, index) => (
+                      <div
+                        key={part.id}
+                        className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.02] border border-white/5"
+                      >
+                        <span className="text-xs text-white/30 mono w-5 text-center shrink-0">
+                          #{index + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={part.title}
+                          onChange={(e) => updatePlaylistPart(part.id, 'title', e.target.value)}
+                          placeholder="Название части (напр. Новолуние)"
+                          className="w-1/3 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        />
+                        <input
+                          type="text"
+                          value={part.url}
+                          onChange={(e) => updatePlaylistPart(part.id, 'url', e.target.value)}
+                          placeholder="Ссылка (YouTube, Rutube, VK...)"
+                          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/90"
+                        />
+                        {playlistParts.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePlaylistPart(part.id)}
+                            className="p-1.5 text-white/30 hover:text-red-400 cursor-pointer shrink-0"
+                            title="Удалить часть"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="pt-4 border-t border-white/[0.08] flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer"
+                  >
+                    <Check size={14} /> Создать плейлист
+                  </button>
+                </div>
+              </form>
+            )}
           </motion.div>
         </motion.div>
       )}

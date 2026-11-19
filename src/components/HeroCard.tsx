@@ -4,6 +4,7 @@ import type { Pin } from '../types'
 import { HISTORY_PERIOD_LABELS } from '../types'
 import { buildYouTubeTimecodeUrl } from '../utils'
 import { PlatformBadge } from './Badges'
+import { PinPoster } from './PinPoster'
 
 interface HeroSectionProps {
   pins: Pin[]
@@ -60,15 +61,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pins, onPlay, onToggle
               className="relative rounded-3xl overflow-hidden glass-card border border-white/10 group shadow-2xl transition-all duration-300 hover:border-white/20 flex flex-col justify-between"
             >
               {/* Background Poster with heavy blur and gradient blend */}
-              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-                {pin.thumbnailUrl || pin.customThumbnailUrl ? (
-                  <img
-                    src={pin.customThumbnailUrl || pin.thumbnailUrl}
-                    alt=""
-                    className="w-full h-full object-cover scale-110 blur-2xl opacity-25 transition-transform duration-700 group-hover:scale-125"
-                  />
-                ) : null}
-                <div className="absolute inset-0 bg-gradient-to-r from-[#060609] via-[#060609]/90 to-black/60" />
+              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none opacity-20">
+                <PinPoster pin={pin} className="w-full h-full scale-125 blur-3xl" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#060609] via-[#060609]/95 to-black/70" />
               </div>
 
               {/* Ambient Accent Glow */}
@@ -159,22 +154,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pins, onPlay, onToggle
                     )}
                   </div>
 
-                  {/* Thumbnail Preview with Play Icon */}
+                  {/* Thumbnail Preview with Play Icon (Using PinPoster) */}
                   <div
                     onClick={() => onPlay(pin)}
                     className="sm:col-span-5 relative aspect-video rounded-xl overflow-hidden border border-white/15 bg-black cursor-pointer group/poster shadow-xl"
                   >
-                    {pin.thumbnailUrl || pin.customThumbnailUrl ? (
-                      <img
-                        src={pin.customThumbnailUrl || pin.thumbnailUrl}
-                        alt={pin.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover/poster:scale-105"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/30">
-                        <Play size={28} />
-                      </div>
-                    )}
+                    <PinPoster pin={pin} />
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/poster:opacity-100 transition-opacity">
                       <div className="p-3 rounded-xl btn-gold shadow-2xl scale-90 group-hover/poster:scale-100 transition-transform">
                         <Play size={18} className="fill-current text-[#0b0d11]" />

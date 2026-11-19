@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Download, Upload, Copy, Check, FileJson, AlertCircle, ClipboardPaste } from 'lucide-react'
-import type { Pin, QuickLink } from '../types'
+import type { Pin, QuickLink, Collection } from '../types'
 import { exportToJson, exportToClipboard, importFromJson } from '../utils/storage'
 import { uid } from '../utils'
 
@@ -10,7 +10,8 @@ interface ExportModalProps {
   onClose: () => void
   pins: Pin[]
   quickLinks: QuickLink[]
-  onImportSuccess: (imported: { pins: Pin[]; quickLinks?: QuickLink[] }) => void
+  collections?: Collection[]
+  onImportSuccess: (imported: { pins: Pin[]; quickLinks?: QuickLink[]; collections?: Collection[] }) => void
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -18,6 +19,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onClose,
   pins,
   quickLinks,
+  collections,
   onImportSuccess,
 }) => {
   const [copied, setCopied] = useState(false)
@@ -28,14 +30,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleCopy = () => {
-    const json = exportToClipboard(pins)
+    const json = exportToClipboard(pins, collections)
     navigator.clipboard.writeText(json)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const handleDownload = () => {
-    exportToJson(pins, quickLinks)
+    exportToJson(pins, quickLinks, collections)
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,6 +68,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       onImportSuccess({
         pins: importedPins.map((p) => ({ ...p, id: p.id || uid() })),
         quickLinks: data.quickLinks,
+        collections: data.collections,
       })
       onClose()
     } catch {

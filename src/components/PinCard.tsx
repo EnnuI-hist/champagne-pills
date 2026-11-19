@@ -15,11 +15,15 @@ import {
   ChevronUp,
   ChevronDown,
   Edit2,
+  ListVideo,
+  CheckSquare,
+  Square,
 } from 'lucide-react'
-import type { Pin } from '../types'
+import type { Pin, PlaylistPart } from '../types'
 import { HISTORY_PERIOD_LABELS } from '../types'
 import { buildYouTubeTimecodeUrl } from '../utils'
 import { PlatformBadge, StatusBadge } from './Badges'
+import { PinPoster } from './PinPoster'
 
 interface PinCardProps {
   pin: Pin
@@ -29,6 +33,8 @@ interface PinCardProps {
   onUpdateEpisode?: (id: string, newEp: number) => void
   onUpdateTimecode?: (id: string, newTimecode: string) => void
   onUpdateRating?: (id: string, newRating: number) => void
+  onTogglePart?: (pinId: string, partId: string) => void
+  onPlayPart?: (pin: Pin, part: PlaylistPart) => void
   onMoveUp?: (id: string) => void
   onMoveDown?: (id: string) => void
   canMoveUp?: boolean
@@ -43,6 +49,8 @@ export const PinCard: React.FC<PinCardProps> = ({
   onUpdateEpisode,
   onUpdateTimecode,
   onUpdateRating,
+  onTogglePart,
+  onPlayPart,
   onMoveUp,
   onMoveDown,
   canMoveUp = true,
@@ -51,6 +59,7 @@ export const PinCard: React.FC<PinCardProps> = ({
   const [copied, setCopied] = useState(false)
   const [isEditingTimecode, setIsEditingTimecode] = useState(false)
   const [tcInput, setTcInput] = useState(pin.timecode || '')
+  const [showParts, setShowParts] = useState(false)
 
   const isEpisodic = pin.contentType === 'anime' || pin.contentType === 'series'
   const currentEp = pin.currentEpisode ?? pin.currentEp ?? 1
@@ -58,6 +67,11 @@ export const PinCard: React.FC<PinCardProps> = ({
 
   const progressPercent =
     totalEp && totalEp > 0 ? Math.min(100, Math.round((currentEp / totalEp) * 100)) : null
+
+  // Multi-part stats
+  const hasParts = Boolean(pin.parts && pin.parts.length > 0)
+  const completedPartsCount = pin.parts?.filter((p) => p.isCompleted).length || 0
+  const totalPartsCount = pin.parts?.length || 0
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -109,26 +123,12 @@ export const PinCard: React.FC<PinCardProps> = ({
       className="glass-card rounded-2xl overflow-hidden group cursor-pointer transition-all duration-300 hover:border-white/20 hover:scale-[1.01] hover:shadow-2xl flex flex-col justify-between relative"
     >
       <div>
-        {/* Thumbnail Banner */}
+        {/* Thumbnail Banner with Fallback (No broken browser images!) */}
         <div className="relative aspect-video w-full overflow-hidden bg-black/60">
-          {pin.thumbnailUrl || pin.customThumbnailUrl ? (
-            <img
-              src={pin.customThumbnailUrl || pin.thumbnailUrl}
-              alt={pin.title}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-white/20 bg-gradient-to-br from-white/[0.03] to-transparent">
-              <Play size={28} />
-            </div>
-          )}
-
-          {/* Gradient Dark Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#060609] via-transparent to-black/50 opacity-80" />
+          <PinPoster pin={pin} />
 
           {/* Top Badges & Controls */}
-          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10 pointer-events-auto">
             <PlatformBadge platform={pin.platform} />
 
             <div className="flex items-center gap-1">
@@ -209,7 +209,7 @@ export const PinCard: React.FC<PinCardProps> = ({
                 <button
                   type="button"
                   onClick={handleSaveTimecode}
-                  className="text-green-400 p-0.5 hover:scale-110"
+                  className="text-green-400 p-0.5 hover:scale-110 cursor-pointer"
                 >
                   <Check size={11} />
                 </button>
@@ -287,6 +287,90 @@ export const PinCard: React.FC<PinCardProps> = ({
             <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[rgba(243,229,171,0.1)] border border-[rgba(243,229,171,0.2)] text-[11px] text-[#f3e5ab] font-medium">
               <span>🏛️</span>
               <span>{HISTORY_PERIOD_LABELS[pin.historyPeriod]}</span>
+            </div>
+          )}
+
+          {/* Multi-part Playlist Support (e.g. Сага «Сумерки»: Фильм 1, 2, 3...) */}
+          {hasParts && (
+            <div
+              className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowParts(!showParts)}
+                  className="flex items-center gap-1.5 text-[#f3e5ab] font-semibold hover:underline cursor-pointer"
+                >
+                  <ListVideo size={13} />
+                  <span>Части / Плейлист ({completedPartsCount}/{totalPartsCount})</span>
+                </button>
+                <span className="text-[10px] text-white/40 mono">
+                  {Math.round((completedPartsCount / Math.max(1, totalPartsCount)) * 100)}%
+                </span>
+              </div>
+
+              {/* Progress bar of parts */}
+              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-[#f3e5ab] to-[#ff2a85]"
+                  style={{
+                    width: `${Math.round((completedPartsCount / Math.max(1, totalPartsCount)) * 100)}%`,
+                  }}
+                />
+              </div>
+
+              {/* Collapsible parts list */}
+              {showParts && (
+                <div className="space-y-1 pt-1 max-h-36 overflow-y-auto pr-1">
+                  {pin.parts?.map((part) => (
+                    <div
+                      key={part.id}
+                      className="flex items-center justify-between p-1.5 rounded-lg bg-white/[0.02] hover:bg-white/5 border border-white/5 transition-colors text-xs"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onTogglePart?.(pin.id, part.id)}
+                        className="flex items-center gap-1.5 text-left min-w-0 flex-1 cursor-pointer"
+                        title={part.isCompleted ? 'Отметить как не просмотрено' : 'Отметить как просмотрено'}
+                      >
+                        {part.isCompleted ? (
+                          <CheckSquare size={13} className="text-green-400 shrink-0" />
+                        ) : (
+                          <Square size={13} className="text-white/30 shrink-0" />
+                        )}
+                        <span
+                          className={`truncate text-[11px] ${
+                            part.isCompleted ? 'line-through text-white/40' : 'text-white/80'
+                          }`}
+                        >
+                          {part.title}
+                        </span>
+                      </button>
+
+                      <div className="flex items-center gap-1 shrink-0 ml-1">
+                        <button
+                          type="button"
+                          onClick={() => onPlayPart?.(pin, part)}
+                          className="p-1 rounded text-[#f3e5ab] hover:bg-white/10"
+                          title="Воспроизвести эту часть"
+                        >
+                          <Play size={11} fill="currentColor" />
+                        </button>
+                        <a
+                          href={part.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1 rounded text-white/30 hover:text-white"
+                          title="Открыть ссылку"
+                        >
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

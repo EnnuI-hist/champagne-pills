@@ -3,7 +3,22 @@ export type Platform = 'youtube' | 'rutube' | 'vk' | 'vimeo' | 'anime' | 'web'
 export type ContentType = 'lecture' | 'anime' | 'movie' | 'video' | 'series'
 export type Status = 'watching' | 'queued' | 'completed' | 'archived' | 'deleted'
 export type StatusFilter = 'all' | 'watching' | 'queued' | 'archive'
-export type Category = 'all' | 'history' | 'anime' | 'video'
+export type Category = string
+
+/* ───── Collections / Sections ───── */
+export interface Collection {
+  id: string
+  name: string
+  emoji?: string
+  color?: string
+  isDefault?: boolean
+}
+
+export const DEFAULT_COLLECTIONS: Collection[] = [
+  { id: 'history', name: 'История (ЕГЭ / Олимп)', emoji: '🏛️', color: '#f3e5ab', isDefault: true },
+  { id: 'anime', name: 'Аниме и Сериалы', emoji: '🍿', color: '#ff2a85', isDefault: true },
+  { id: 'video', name: 'Видео / Эссе', emoji: '🎬', color: '#a855f7', isDefault: true },
+]
 
 export type HistoryPeriod =
   | 'ancient'
@@ -44,6 +59,15 @@ export interface TimecodeBookmark {
   label: string
 }
 
+/* ───── Playlist Parts (Multi-part Collections) ───── */
+export interface PlaylistPart {
+  id: string
+  title: string
+  url: string
+  isCompleted?: boolean
+  timecode?: string
+}
+
 /* ───── Pin ───── */
 export interface Pin {
   id: string
@@ -60,6 +84,7 @@ export interface Pin {
   notes?: string
   timecode?: string
   timecodeBookmarks?: TimecodeBookmark[]
+  parts?: PlaylistPart[]
   lectureNumber?: number
   totalLectures?: number
   // Support both currentEp/totalEp and currentEpisode/totalEpisodes
@@ -93,6 +118,7 @@ export interface QuickLink {
 export interface AppData {
   pins: Pin[]
   quickLinks?: QuickLink[]
+  collections?: Collection[]
   exportedAt: string
   version: string
 }
