@@ -339,6 +339,8 @@ export default function App() {
 
       {/* Floating Neon Spots in Background */}
       <div className="ambient-bg" />
+      <div className="fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[380px] bg-gradient-to-tr from-[#f3e5ab]/[0.05] via-[#ff2a85]/[0.04] to-transparent rounded-full blur-[140px] pointer-events-none z-0" />
+      <div className="fixed bottom-16 right-10 w-[480px] h-[320px] bg-[#a855f7]/[0.04] rounded-full blur-[120px] pointer-events-none z-0" />
 
       {/* Main UI layer */}
       <div className="relative z-10 flex flex-col min-h-screen">
@@ -374,7 +376,7 @@ export default function App() {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <main className="max-w-6xl w-full mx-auto px-4 sm:px-6 pt-4 pb-10 flex-1">
           {/* Dynamic Pin Grid & Navigation */}
           <PinGrid
             pins={displayPins}
@@ -413,7 +415,7 @@ export default function App() {
         </main>
 
         {/* Minimal Editorial Footer */}
-        <footer className="w-full border-t border-white/[0.06] py-4 px-4 text-center text-xs text-white/30 space-y-1">
+        <footer className="w-full border-t border-white/[0.06] py-5 px-4 text-center text-xs text-white/30 space-y-1 mt-auto">
           <div
             style={{ fontFamily: "'JetBrains Mono', monospace" }}
           >

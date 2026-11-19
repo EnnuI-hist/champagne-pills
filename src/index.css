@@ -36,9 +36,9 @@ body::before {
 .ambient-bg {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(ellipse 55% 50% at 15% 10%,  var(--g1) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 55% at 82% 85%, var(--g2) 0%, transparent 70%),
-    radial-gradient(ellipse 35% 35% at 55% 45%, rgba(255,42,133,0.025) 0%, transparent 60%);
+    radial-gradient(ellipse 65% 55% at 15% 15%, var(--g1) 0%, transparent 68%),
+    radial-gradient(ellipse 60% 60% at 85% 85%, var(--g2) 0%, transparent 68%),
+    radial-gradient(ellipse 45% 45% at 50% 45%, rgba(243,229,171,0.035) 0%, transparent 60%);
   transition: background 1.5s ease;
 }
 

@@ -19,6 +19,7 @@ import {
   MoreHorizontal,
   Archive,
   RotateCcw,
+  Edit2,
 } from 'lucide-react'
 import type { Pin, PlaylistPart, Status } from '../types'
 import { buildYouTubeTimecodeUrl } from '../utils'
@@ -127,7 +128,7 @@ export const PinCard: React.FC<PinCardProps> = ({
       ? buildYouTubeTimecodeUrl(pin.url, pin.timecode)
       : pin.url
 
-  // Button label
+  // Primary action button label
   const primaryButtonLabel = pin.timecode
     ? `Смотреть с ${pin.timecode}`
     : isEpisodic
@@ -149,7 +150,7 @@ export const PinCard: React.FC<PinCardProps> = ({
       }`}
     >
       <div className="flex flex-col flex-1">
-        {/* Thumbnail Banner with Fallback (No broken browser images, no single letters!) */}
+        {/* Thumbnail Banner with Fallback (No broken browser images, no duplicated title!) */}
         <div className="relative aspect-video w-full overflow-hidden bg-black/60 shrink-0">
           <PinPoster pin={pin} />
 
@@ -207,52 +208,13 @@ export const PinCard: React.FC<PinCardProps> = ({
 
           {/* Quick Play hover overlay */}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/35 backdrop-blur-[2px]">
-            <div className="p-3.5 rounded-2xl btn-gold shadow-2xl scale-90 group-hover:scale-100 transition-transform">
-              <Play size={20} className="fill-current text-[#0b0d11]" />
+            <div className="p-3 rounded-2xl btn-gold shadow-2xl scale-90 group-hover:scale-100 transition-transform">
+              <Play size={18} className="fill-current text-[#0b0d11]" />
             </div>
           </div>
 
-          {/* Bottom Thumbnail Info: Stop Timecode & Status */}
-          <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between z-10">
-            {/* Inline timecode stop / editor */}
-            {isEditingTimecode ? (
-              <div
-                className="flex items-center gap-1 bg-black/90 p-1 px-2 rounded-lg border border-[#f3e5ab]/60 shadow-lg"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <input
-                  type="text"
-                  value={tcInput}
-                  onChange={(e) => setTcInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveTimecode()
-                    if (e.key === 'Escape') setIsEditingTimecode(false)
-                  }}
-                  placeholder="00:15:30"
-                  className="w-16 bg-transparent text-[11px] text-[#f3e5ab] mono text-center focus:outline-none"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveTimecode}
-                  className="text-green-400 p-0.5 hover:scale-110 cursor-pointer"
-                  title="Сохранить"
-                >
-                  <Check size={12} />
-                </button>
-              </div>
-            ) : pin.timecode ? (
-              <div className="flex items-center gap-1">
-                <span
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/10 text-[11px] text-[#f3e5ab] mono"
-                  title="Сохраненный таймкод"
-                >
-                  <Clock size={11} className="text-[#f3e5ab]" />
-                  <span>{pin.timecode}</span>
-                </span>
-              </div>
-            ) : <span />}
-
+          {/* Bottom Thumbnail Info: Status badge */}
+          <div className="absolute bottom-2 right-2.5 z-10">
             <StatusBadge status={pin.status} />
           </div>
 
@@ -267,9 +229,9 @@ export const PinCard: React.FC<PinCardProps> = ({
           )}
         </div>
 
-        {/* Card Body */}
-        <div className="p-4 space-y-3 flex-1 flex flex-col">
-          {/* Title & Author & Rating Badge */}
+        {/* Card Body - Compact and balanced without vertical voids */}
+        <div className="p-3.5 sm:p-4 space-y-2.5 flex-1 flex flex-col justify-start">
+          {/* Title & Channel & Rating Badge */}
           <div>
             <div className="flex items-start justify-between gap-2">
               <h4 className="text-sm font-semibold text-white/95 leading-snug line-clamp-2 group-hover:text-[#f3e5ab] transition-colors flex-1">
@@ -282,14 +244,14 @@ export const PinCard: React.FC<PinCardProps> = ({
               ) : null}
             </div>
             {pin.channelName && (
-              <p className="text-xs text-white/40 mt-1 truncate">{pin.channelName}</p>
+              <p className="text-xs text-white/40 mt-0.5 truncate">{pin.channelName}</p>
             )}
           </div>
 
           {/* Multi-part Playlist Support */}
           {hasParts && (
             <div
-              className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2"
+              className="p-2 sm:p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between text-xs">
@@ -299,7 +261,7 @@ export const PinCard: React.FC<PinCardProps> = ({
                   className="flex items-center gap-1.5 text-[#f3e5ab] font-semibold hover:underline cursor-pointer"
                 >
                   <ListVideo size={13} />
-                  <span>Части / Плейлист ({completedPartsCount}/{totalPartsCount})</span>
+                  <span>Части ({completedPartsCount}/{totalPartsCount})</span>
                 </button>
                 <span className="text-[10px] text-white/40 mono">
                   {Math.round((completedPartsCount / Math.max(1, totalPartsCount)) * 100)}%
@@ -373,7 +335,7 @@ export const PinCard: React.FC<PinCardProps> = ({
           {/* Episodic Tracker controls (- and +1 right on card) */}
           {isEpisodic && (
             <div
-              className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5"
+              className="p-2 sm:p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between text-xs">
@@ -422,7 +384,61 @@ export const PinCard: React.FC<PinCardProps> = ({
             </div>
           )}
 
-          {/* Lecture Progress */}
+          {/* Non-episodic Timecode Tracker Box (Regular videos, lectures, essays) */}
+          {!isEpisodic && (
+            <div
+              className="p-2 sm:p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-xs"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-1.5 text-white/80">
+                <Clock size={13} className="text-[#f3e5ab]" />
+                <span className="text-[11px] text-white/45">Таймкод:</span>
+                <span className="mono font-semibold text-[#f3e5ab] text-xs">
+                  {pin.timecode || '00:00:00'}
+                </span>
+              </div>
+
+              {isEditingTimecode ? (
+                <div className="flex items-center gap-1 bg-black/90 px-1.5 py-0.5 rounded-lg border border-[#f3e5ab]/50 shadow-md">
+                  <input
+                    type="text"
+                    value={tcInput}
+                    onChange={(e) => setTcInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveTimecode()
+                      if (e.key === 'Escape') setIsEditingTimecode(false)
+                    }}
+                    placeholder="00:15:30"
+                    className="w-16 bg-transparent text-[11px] text-[#f3e5ab] mono text-center focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveTimecode}
+                    className="text-green-400 p-0.5 hover:scale-110 cursor-pointer"
+                    title="Сохранить таймкод"
+                  >
+                    <Check size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTcInput(pin.timecode || '00:00:00')
+                    setIsEditingTimecode(true)
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-[#f3e5ab] border border-white/5 transition-colors cursor-pointer text-[11px]"
+                  title="Быстро изменить таймкод в 1 клик"
+                >
+                  <Edit2 size={11} />
+                  <span>Изменить</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Lecture Progress (if applicable) */}
           {pin.lectureNumber && (
             <div className="flex items-center gap-1.5 text-xs text-white/60 mono">
               <BookOpen size={13} className="text-[#f3e5ab]" />
@@ -443,7 +459,7 @@ export const PinCard: React.FC<PinCardProps> = ({
 
           {/* Tags */}
           {pin.tags && pin.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-auto">
+            <div className="flex flex-wrap gap-1 pt-0.5">
               {pin.tags.map((tag) => (
                 <span
                   key={tag}
@@ -459,7 +475,7 @@ export const PinCard: React.FC<PinCardProps> = ({
 
       {/* ── Minimalist Clean Footer: Single Primary Action + Context Menu (•••) ── */}
       <div
-        className="p-3 px-4 border-t border-white/[0.06] flex items-center gap-2 relative shrink-0"
+        className="p-2.5 px-3.5 sm:px-4 border-t border-white/[0.06] flex items-center gap-2 relative shrink-0 mt-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Single Primary Action Button */}
@@ -495,6 +511,7 @@ export const PinCard: React.FC<PinCardProps> = ({
                 type="button"
                 onClick={() => {
                   setShowMenu(false)
+                  setTcInput(pin.timecode || '00:00:00')
                   setIsEditingTimecode(true)
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 hover:text-[#f3e5ab] text-left transition-colors cursor-pointer"

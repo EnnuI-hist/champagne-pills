@@ -9,10 +9,10 @@ export const PRESET_DATA: Record<ThemePreset, {
   label: string; emoji: string
   g1: string; g2: string; accent: string
 }> = {
-  champagne: { label: 'Champagne & Rose', emoji: '🥂', g1: 'rgba(232,207,160,0.07)', g2: 'rgba(255,42,133,0.08)', accent: '#f3e5ab' },
-  cyber:     { label: 'Cyber Violet',     emoji: '🔮', g1: 'rgba(99,102,241,0.09)',  g2: 'rgba(217,70,239,0.09)', accent: '#c084fc' },
-  emerald:   { label: 'Emerald Noir',     emoji: '🌿', g1: 'rgba(0,212,164,0.08)',   g2: 'rgba(16,185,129,0.06)', accent: '#34d399' },
-  crimson:   { label: 'Crimson Velvet',    emoji: '🍷', g1: 'rgba(220,38,38,0.08)',   g2: 'rgba(190,18,60,0.06)',  accent: '#fb7185' },
+  champagne: { label: 'Champagne & Rose', emoji: '🥂', g1: 'rgba(243,229,171,0.13)', g2: 'rgba(255,42,133,0.14)', accent: '#f3e5ab' },
+  cyber:     { label: 'Cyber Violet',     emoji: '🔮', g1: 'rgba(99,102,241,0.14)',  g2: 'rgba(217,70,239,0.15)', accent: '#c084fc' },
+  emerald:   { label: 'Emerald Noir',     emoji: '🌿', g1: 'rgba(0,212,164,0.14)',   g2: 'rgba(16,185,129,0.12)', accent: '#34d399' },
+  crimson:   { label: 'Crimson Velvet',    emoji: '🍷', g1: 'rgba(220,38,38,0.14)',   g2: 'rgba(190,18,60,0.12)',  accent: '#fb7185' },
 }
 
 export function useTheme() {

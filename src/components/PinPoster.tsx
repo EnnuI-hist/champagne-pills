@@ -62,56 +62,54 @@ export const PinPoster: React.FC<PinPosterProps> = ({
     )
   }
 
-  // Large blurred platform icon for the background artwork
-  const renderBackgroundArtwork = () => {
-    const iconClass = 'w-24 h-24 sm:w-28 sm:h-28 text-white/[0.06] blur-[1px] transform -rotate-12 select-none pointer-events-none'
-    if (pin.platform === 'youtube') return <Play className={`${iconClass} fill-current`} />
-    if (pin.platform === 'anime' || pin.contentType === 'anime') return <Tv className={iconClass} />
-    if (pin.platform === 'rutube' || pin.platform === 'vimeo') return <Video className={iconClass} />
-    if (pin.platform === 'vk') return <Globe className={iconClass} />
-    return <Film className={iconClass} />
+  // Large center platform icon with soft ambient glow
+  const renderCenterPlatformIcon = () => {
+    const size = 36
+    if (pin.platform === 'youtube') return <Play size={size} className="fill-current text-red-400/80 drop-shadow-[0_0_12px_rgba(239,68,68,0.5)]" />
+    if (pin.platform === 'anime' || pin.contentType === 'anime') return <Tv size={size} className="text-[#ff2a85]/80 drop-shadow-[0_0_12px_rgba(255,42,133,0.5)]" />
+    if (pin.platform === 'rutube') return <Video size={size} className="text-blue-400/80 drop-shadow-[0_0_12px_rgba(96,165,250,0.5)]" />
+    if (pin.platform === 'vimeo') return <Video size={size} className="text-teal-400/80 drop-shadow-[0_0_12px_rgba(45,212,191,0.5)]" />
+    if (pin.platform === 'vk') return <Globe size={size} className="text-sky-400/80 drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]" />
+    return <Film size={size} className="text-[#f3e5ab]/80 drop-shadow-[0_0_12px_rgba(243,229,171,0.5)]" />
   }
 
-  // Stylish Nocturnal Editorial Fallback (no broken browser images, no solitary letters C/S!)
+  // Stylish Nocturnal Minimalist Fallback: Ambient neon gradient + center icon + corner badges (No duplicated text!)
   return (
     <div
-      className={`relative w-full overflow-hidden bg-gradient-to-br from-[#181a28] via-[#0d0e17] to-[#06070a] ${aspectRatio} ${className} flex flex-col justify-between p-3 sm:p-3.5 select-none border border-white/5`}
+      className={`relative w-full overflow-hidden bg-gradient-to-br from-[#181a28] via-[#0d0e17] to-[#06070a] ${aspectRatio} ${className} flex items-center justify-center select-none border border-white/5`}
     >
       {/* Decorative ambient glowing spots */}
       <div
-        className="absolute -top-10 -right-10 w-36 h-36 rounded-full opacity-25 blur-3xl pointer-events-none"
+        className="absolute -top-10 -right-10 w-36 h-36 rounded-full opacity-30 blur-3xl pointer-events-none"
         style={{
           background: 'radial-gradient(circle, #f3e5ab 0%, #ff2a85 100%)',
         }}
       />
       <div
-        className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-20 blur-3xl pointer-events-none"
+        className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-25 blur-3xl pointer-events-none"
         style={{
           background: 'radial-gradient(circle, #a855f7 0%, #06b6d4 100%)',
         }}
       />
 
-      {/* Large artistic semi-transparent background platform icon */}
-      <div className="absolute right-1 bottom-1 sm:right-3 sm:bottom-2 z-0">
-        {renderBackgroundArtwork()}
+      {/* Soft Vignette Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40 pointer-events-none z-[5]" />
+
+      {/* Top-left platform watermark */}
+      <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/60 border border-white/10 backdrop-blur-md">
+        {PLATFORM_ICONS[pin.platform] || <Sparkles size={12} className="text-[#f3e5ab]" />}
+        <span
+          className="text-[9px] uppercase tracking-wider text-white/70 font-semibold"
+          style={{ fontFamily: "'JetBrains Mono', monospace" }}
+        >
+          {pin.platform.toUpperCase()}
+        </span>
       </div>
 
-      {/* Soft Vignette Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent pointer-events-none z-[5]" />
-
-      {/* Top watermark / platform badge */}
-      <div className="relative z-10 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/60 border border-white/10 backdrop-blur-md">
-          {PLATFORM_ICONS[pin.platform] || <Sparkles size={12} className="text-[#f3e5ab]" />}
-          <span
-            className="text-[9px] uppercase tracking-wider text-white/70 font-semibold"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
-          >
-            {pin.platform.toUpperCase()}
-          </span>
-        </div>
+      {/* Top-right status / media badge */}
+      <div className="absolute top-2.5 right-2.5 z-10">
         <span
-          className="text-[9px] uppercase tracking-widest text-white/40 font-semibold"
+          className="text-[9px] uppercase tracking-widest text-white/45 font-semibold px-2 py-0.5 rounded-lg bg-black/60 border border-white/10 backdrop-blur-md"
           style={{ fontFamily: "'JetBrains Mono', monospace" }}
         >
           {pin.parts && pin.parts.length > 0
@@ -122,24 +120,14 @@ export const PinPoster: React.FC<PinPosterProps> = ({
             ? 'СЕРИАЛ'
             : pin.contentType === 'lecture'
             ? 'ЛЕКЦИЯ'
-            : 'МЕДИА'}
+            : 'ВИДЕО'}
         </span>
       </div>
 
-      {/* Bottom-left corner: neat title + channel / timecode with soft vignette */}
-      <div className="relative z-10 mt-auto pt-3 text-left">
-        <h5 className="text-xs sm:text-sm font-semibold text-white/95 line-clamp-2 leading-snug drop-shadow-md">
-          {pin.title}
-        </h5>
-        <div className="flex items-center justify-between text-[10px] text-white/45 mt-1">
-          <span className="truncate max-w-[140px] text-[#f3e5ab]/80 font-medium">
-            {pin.channelName || 'champagne&pills'}
-          </span>
-          {pin.timecode && (
-            <span className="mono text-[#f3e5ab] bg-black/60 px-1.5 py-0.2 rounded border border-white/10">
-              {pin.timecode}
-            </span>
-          )}
+      {/* Center: Large Stylish Semi-transparent Platform Emblem */}
+      <div className="relative z-10 flex items-center justify-center">
+        <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.6)] group-hover:scale-105 group-hover:border-[#f3e5ab]/30 transition-all duration-300">
+          {renderCenterPlatformIcon()}
         </div>
       </div>
     </div>
