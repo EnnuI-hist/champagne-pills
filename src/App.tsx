@@ -11,6 +11,7 @@ import { TrashModal } from './components/TrashModal'
 import { ExportModal } from './components/ExportModal'
 import { CollectionModal } from './components/CollectionModal'
 import { ManageSectionsModal } from './components/ManageSectionsModal'
+import { AnimeListModal } from './components/AnimeListModal'
 import { ToastUndo } from './components/ToastUndo'
 import { PinGrid } from './components/PinGrid'
 
@@ -22,8 +23,11 @@ import {
   saveQuickLinks,
   loadCollections,
   saveCollections,
+  loadAnimeList,
+  saveAnimeList,
 } from './utils/storage'
 import { getBlobUrl } from './utils/db'
+import { uid } from './utils'
 
 import type {
   Pin,
@@ -33,6 +37,7 @@ import type {
   StatusFilter,
   Collection,
   PlaylistPart,
+  AnimeItem,
 } from './types'
 
 export default function App() {
@@ -114,6 +119,53 @@ export default function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [showTrashModal, setShowTrashModal] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showAnimeModal, setShowAnimeModal] = useState(false)
+
+  // Anime List Tracker
+  const [animeList, setAnimeList] = useState<AnimeItem[]>(loadAnimeList)
+  const unwatchedAnimeCount = useMemo(
+    () => animeList.filter((a) => !a.isCompleted).length,
+    [animeList],
+  )
+
+  const handleAddAnime = (item: Omit<AnimeItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString()
+    const newItem: AnimeItem = {
+      ...item,
+      id: uid(),
+      createdAt: now,
+      updatedAt: now,
+    }
+    const updated = [newItem, ...animeList]
+    setAnimeList(updated)
+    saveAnimeList(updated)
+  }
+
+  const handleUpdateAnime = (updatedItem: AnimeItem) => {
+    const updated = animeList.map((a) => (a.id === updatedItem.id ? updatedItem : a))
+    setAnimeList(updated)
+    saveAnimeList(updated)
+  }
+
+  const handleDeleteAnime = (id: string) => {
+    const updated = animeList.filter((a) => a.id !== id)
+    setAnimeList(updated)
+    saveAnimeList(updated)
+  }
+
+  const handleToggleAnime = (id: string) => {
+    const updated = animeList.map((a) =>
+      a.id === id
+        ? {
+            ...a,
+            isCompleted: !a.isCompleted,
+            updatedAt: new Date().toISOString(),
+          }
+        : a,
+    )
+    setAnimeList(updated)
+    saveAnimeList(updated)
+  }
 
   // Pomodoro
   const [workMin, setWorkMin] = useState(45)
@@ -375,6 +427,8 @@ export default function App() {
           onOpenRoulette={() => setShowRouletteModal(true)}
           onOpenTrash={() => setShowTrashModal(true)}
           onOpenExport={() => setShowExportModal(true)}
+          onOpenAnimeList={() => setShowAnimeModal(true)}
+          unwatchedAnimeCount={unwatchedAnimeCount}
           totalPinsCount={allActivePins.length}
           deletedPinsCount={trash.length}
           isPomodoroRunning={pomodoro.running}
@@ -565,6 +619,7 @@ export default function App() {
         onOpenRoulette={() => setShowRouletteModal(true)}
         onOpenTrash={() => setShowTrashModal(true)}
         onOpenExport={() => setShowExportModal(true)}
+        onOpenAnimeList={() => setShowAnimeModal(true)}
       />
 
       {/* Trash Modal */}
@@ -584,6 +639,7 @@ export default function App() {
         pins={pins}
         quickLinks={quickLinks}
         collections={collections}
+        animeList={animeList}
         onImportSuccess={(imported) => {
           sync(imported.pins)
           if (imported.quickLinks) {
@@ -594,7 +650,22 @@ export default function App() {
             setCollections(imported.collections)
             saveCollections(imported.collections)
           }
+          if (imported.animeList) {
+            setAnimeList(imported.animeList)
+            saveAnimeList(imported.animeList)
+          }
         }}
+      />
+
+      {/* Anime Tracker List Modal */}
+      <AnimeListModal
+        open={showAnimeModal}
+        onClose={() => setShowAnimeModal(false)}
+        animeList={animeList}
+        onAddAnime={handleAddAnime}
+        onUpdateAnime={handleUpdateAnime}
+        onDeleteAnime={handleDeleteAnime}
+        onToggleAnime={handleToggleAnime}
       />
 
       {/* Toast Undo for Soft Delete */}

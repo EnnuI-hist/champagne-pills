@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Download, Upload, Copy, Check, FileJson, AlertCircle, ClipboardPaste } from 'lucide-react'
-import type { Pin, QuickLink, Collection } from '../types'
+import type { Pin, QuickLink, Collection, AnimeItem } from '../types'
 import { exportToJson, exportToClipboard, importFromJson } from '../utils/storage'
 import { uid } from '../utils'
 
@@ -11,7 +11,13 @@ interface ExportModalProps {
   pins: Pin[]
   quickLinks: QuickLink[]
   collections?: Collection[]
-  onImportSuccess: (imported: { pins: Pin[]; quickLinks?: QuickLink[]; collections?: Collection[] }) => void
+  animeList?: AnimeItem[]
+  onImportSuccess: (imported: {
+    pins: Pin[]
+    quickLinks?: QuickLink[]
+    collections?: Collection[]
+    animeList?: AnimeItem[]
+  }) => void
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -20,6 +26,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   pins,
   quickLinks,
   collections,
+  animeList,
   onImportSuccess,
 }) => {
   const [copied, setCopied] = useState(false)
@@ -30,14 +37,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleCopy = () => {
-    const json = exportToClipboard(pins, collections)
+    const json = exportToClipboard(pins, collections, animeList)
     navigator.clipboard.writeText(json)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const handleDownload = () => {
-    exportToJson(pins, quickLinks, collections)
+    exportToJson(pins, quickLinks, collections, animeList)
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,6 +76,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         pins: importedPins.map((p) => ({ ...p, id: p.id || uid() })),
         quickLinks: data.quickLinks,
         collections: data.collections,
+        animeList: Array.isArray(data.animeList)
+          ? data.animeList.map((a: AnimeItem) => ({ ...a, id: a.id || uid() }))
+          : undefined,
       })
       onClose()
     } catch {

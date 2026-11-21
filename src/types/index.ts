@@ -88,11 +88,25 @@ export interface QuickLink {
   emoji?: string
 }
 
+/* ───── Anime Tracker Item ───── */
+export interface AnimeItem {
+  id: string
+  title: string
+  note?: string
+  totalEpisodes?: number
+  isCompleted: boolean
+  rating?: number // 1-10
+  tags?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 /* ───── Export Format ───── */
 export interface AppData {
   pins: Pin[]
   quickLinks?: QuickLink[]
   collections?: Collection[]
+  animeList?: AnimeItem[]
   exportedAt: string
   version: string
 }

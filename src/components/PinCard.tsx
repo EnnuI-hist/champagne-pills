@@ -104,12 +104,32 @@ export const PinCard: React.FC<PinCardProps> = ({
       ? buildYouTubeTimecodeUrl(pin.url, pin.timecode)
       : pin.url
 
+  // Playlist / Next unwatched part calculations
+  const nextUnwatchedPart = pin.parts?.find((p) => !p.isCompleted) || pin.parts?.[0]
+  const nextPartIndex = nextUnwatchedPart && pin.parts ? pin.parts.indexOf(nextUnwatchedPart) : -1
+  const isAllPartsCompleted = hasParts && completedPartsCount === totalPartsCount && totalPartsCount > 0
+  const partsProgressPercent = hasParts
+    ? Math.round((completedPartsCount / Math.max(1, totalPartsCount)) * 100)
+    : 0
+
   // Primary action button label
-  const primaryButtonLabel = pin.timecode
+  const primaryButtonLabel = hasParts
+    ? isAllPartsCompleted
+      ? 'Смотреть с начала'
+      : `Смотреть #${nextPartIndex + 1}`
+    : pin.timecode
     ? `Смотреть с ${pin.timecode}`
     : isEpisodic
     ? `Серия ${currentEp}`
     : 'Смотреть'
+
+  const handleCardClick = () => {
+    if (hasParts && nextUnwatchedPart && onPlayPart) {
+      onPlayPart(pin, nextUnwatchedPart)
+    } else {
+      onPlay(pin)
+    }
+  }
 
   return (
     <motion.div
@@ -118,7 +138,7 @@ export const PinCard: React.FC<PinCardProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
-      onClick={() => onPlay(pin)}
+      onClick={handleCardClick}
       className={`glass-card rounded-2xl overflow-hidden group cursor-pointer transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl flex flex-col justify-between relative h-full border ${
         pin.isPinned
           ? 'border-[#f3e5ab]/60 shadow-[0_0_20px_rgba(243,229,171,0.16)] ring-1 ring-[#f3e5ab]/30'
@@ -259,7 +279,7 @@ export const PinCard: React.FC<PinCardProps> = ({
           {/* Multi-part Playlist Support */}
           {hasParts && (
             <div
-              className="p-2 sm:p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5"
+              className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between text-xs">
@@ -269,72 +289,115 @@ export const PinCard: React.FC<PinCardProps> = ({
                   className="flex items-center gap-1.5 text-[#f3e5ab] font-semibold hover:underline cursor-pointer"
                 >
                   <ListVideo size={13} />
-                  <span>Части ({completedPartsCount}/{totalPartsCount})</span>
+                  <span>Плейлист ({completedPartsCount}/{totalPartsCount})</span>
+                  {showParts ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
-                <span className="text-[10px] text-white/40 mono">
-                  {Math.round((completedPartsCount / Math.max(1, totalPartsCount)) * 100)}%
+                <span className="text-[10px] text-[#f3e5ab] mono font-bold">
+                  {partsProgressPercent}%
                 </span>
               </div>
 
               {/* Progress bar of parts */}
-              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-[#f3e5ab] to-[#ff2a85]"
-                  style={{
-                    width: `${Math.round((completedPartsCount / Math.max(1, totalPartsCount)) * 100)}%`,
-                  }}
+                  className="h-full bg-gradient-to-r from-[#f3e5ab] to-[#ff2a85] shadow-[0_0_8px_rgba(243,229,171,0.5)] transition-all duration-300"
+                  style={{ width: `${partsProgressPercent}%` }}
                 />
               </div>
 
+              {/* Primary Launch Unwatched Part Button */}
+              {nextUnwatchedPart && !isAllPartsCompleted ? (
+                <button
+                  type="button"
+                  onClick={() => onPlayPart?.(pin, nextUnwatchedPart)}
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-[rgba(243,229,171,0.08)] hover:bg-[rgba(243,229,171,0.18)] border border-[#f3e5ab]/30 hover:border-[#f3e5ab]/50 text-left flex items-center justify-between text-xs text-[#f3e5ab] transition-all cursor-pointer group/btn"
+                  title={`Смотреть: #${nextPartIndex + 1} ${nextUnwatchedPart.title}`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Play size={10} className="fill-current text-[#f3e5ab] shrink-0" />
+                    <span className="truncate text-[11px] text-white/90">
+                      <span className="mono font-bold text-[#f3e5ab] mr-1">#{nextPartIndex + 1}</span>
+                      {nextUnwatchedPart.title}
+                    </span>
+                  </div>
+                  <span className="text-[10px] mono text-[#f3e5ab] shrink-0 ml-1 group-hover/btn:underline">
+                    Смотреть ▶
+                  </span>
+                </button>
+              ) : isAllPartsCompleted ? (
+                <div className="py-1 px-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] flex items-center justify-between">
+                  <span className="flex items-center gap-1 font-medium">
+                    <Check size={12} /> Все {totalPartsCount} видео просмотрены
+                  </span>
+                  {pin.parts?.[0] && (
+                    <button
+                      type="button"
+                      onClick={() => onPlayPart?.(pin, pin.parts![0])}
+                      className="text-[10px] text-white/50 hover:text-white underline cursor-pointer"
+                    >
+                      Сначала
+                    </button>
+                  )}
+                </div>
+              ) : null}
+
               {/* Collapsible parts list */}
               {showParts && (
-                <div className="space-y-1 pt-1 max-h-36 overflow-y-auto pr-1">
-                  {pin.parts?.map((part) => (
-                    <div
-                      key={part.id}
-                      className="flex items-center justify-between p-1.5 rounded-lg bg-white/[0.02] hover:bg-white/5 border border-white/5 transition-colors text-xs"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onTogglePart?.(pin.id, part.id)}
-                        className="flex items-center gap-1.5 text-left min-w-0 flex-1 cursor-pointer"
-                        title={part.isCompleted ? 'Отметить как не просмотрено' : 'Отметить как просмотрено'}
+                <div className="space-y-1 pt-1 max-h-44 overflow-y-auto pr-1">
+                  {pin.parts?.map((part, idx) => {
+                    const isNext = !part.isCompleted && part.id === nextUnwatchedPart?.id
+                    return (
+                      <div
+                        key={part.id}
+                        className={`flex items-center justify-between p-1.5 rounded-lg border transition-colors text-xs ${
+                          isNext
+                            ? 'bg-[rgba(243,229,171,0.06)] border-[#f3e5ab]/30'
+                            : 'bg-white/[0.02] hover:bg-white/5 border-white/5'
+                        }`}
                       >
-                        {part.isCompleted ? (
-                          <CheckSquare size={13} className="text-green-400 shrink-0" />
-                        ) : (
-                          <Square size={13} className="text-white/30 shrink-0" />
-                        )}
-                        <span
-                          className={`truncate text-[11px] ${
-                            part.isCompleted ? 'line-through text-white/40' : 'text-white/80'
-                          }`}
-                        >
-                          {part.title}
-                        </span>
-                      </button>
-
-                      <div className="flex items-center gap-1 shrink-0 ml-1">
                         <button
                           type="button"
-                          onClick={() => onPlayPart?.(pin, part)}
-                          className="p-1 rounded text-[#f3e5ab] hover:bg-white/10"
-                          title="Воспроизвести эту часть"
+                          onClick={() => onTogglePart?.(pin.id, part.id)}
+                          className="flex items-center gap-1.5 text-left min-w-0 flex-1 cursor-pointer"
+                          title={part.isCompleted ? 'Отметить как не просмотрено' : 'Отметить как просмотрено'}
                         >
-                          <Play size={11} fill="currentColor" />
+                          {part.isCompleted ? (
+                            <CheckSquare size={14} className="text-emerald-400 shrink-0" />
+                          ) : (
+                            <Square size={14} className="text-white/30 hover:text-white/60 shrink-0" />
+                          )}
+                          <span
+                            className={`truncate text-[11px] ${
+                              part.isCompleted ? 'line-through text-white/40' : 'text-white/85'
+                            }`}
+                          >
+                            <span className="mono text-[10px] mr-1 opacity-50">#{idx + 1}</span>
+                            {part.title}
+                          </span>
                         </button>
-                        <a
-                          href={part.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1 rounded text-white/30 hover:text-white"
-                          title="Открыть ссылку"
-                        >
-                          <ExternalLink size={11} />
-                        </a>
+
+                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                          <button
+                            type="button"
+                            onClick={() => onPlayPart?.(pin, part)}
+                            className="p-1 rounded text-[#f3e5ab] hover:bg-white/10 cursor-pointer"
+                            title="Воспроизвести эту часть"
+                          >
+                            <Play size={11} fill="currentColor" />
+                          </button>
+                          <a
+                            href={part.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1 rounded text-white/30 hover:text-white"
+                            title="Открыть ссылку на YouTube"
+                          >
+                            <ExternalLink size={11} />
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -489,7 +552,7 @@ export const PinCard: React.FC<PinCardProps> = ({
         {/* Primary Action Button */}
         <button
           type="button"
-          onClick={() => onPlay(pin)}
+          onClick={handleCardClick}
           className="flex-1 py-2 px-3.5 rounded-xl btn-gold text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer"
         >
           <Play size={13} className="fill-current text-[#0b0d11]" />

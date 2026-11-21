@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Plus, Palette, Bell, Dices, Trash2, ExternalLink, Play, Tag, FileJson } from 'lucide-react'
+import { Search, Plus, Palette, Bell, Dices, Trash2, ExternalLink, Play, Tag, FileJson, Tv } from 'lucide-react'
 import type { Pin, QuickLink } from '../types'
 import { PlatformBadge } from './Badges'
 
@@ -16,6 +16,7 @@ interface CommandPaletteProps {
   onOpenRoulette: () => void
   onOpenTrash: () => void
   onOpenExport?: () => void
+  onOpenAnimeList?: () => void
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -30,6 +31,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenRoulette,
   onOpenTrash,
   onOpenExport,
+  onOpenAnimeList,
 }) => {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -103,6 +105,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       run: () => {
         onClose()
         onOpenPomodoro()
+      },
+    },
+    {
+      id: 'action-anime',
+      title: 'Мой список аниме',
+      sub: 'Тайтлы на будущее, отметки о просмотре и оценки',
+      icon: <Tv size={16} className="text-[#ff2a85]" />,
+      run: () => {
+        onClose()
+        onOpenAnimeList?.()
       },
     },
     {

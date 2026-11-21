@@ -17,9 +17,13 @@ import {
   Plus,
   Trash2,
   Layers,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import type { Pin, Platform, ContentType, Category, Status, Collection, PlaylistPart } from '../types'
 import { detectPlatform, extractYouTubeId, uid, guessCategory, inferContentType } from '../utils'
+import { extractPlaylistId, fetchPlaylistVideos } from '../utils/youtubeApi'
 import { fetchVideoMeta, youtubeHqThumb } from '../utils/metadata'
 import { compressImageToWebp, saveBlob } from '../utils/db'
 import { PlatformBadge } from './Badges'
@@ -119,6 +123,16 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     { id: uid(), title: 'Фильм 2', url: '' },
   ])
 
+  // Playlist Auto-Import State
+  const [detectedPlaylistId, setDetectedPlaylistId] = useState<string | null>(null)
+  const [isImportPlaylist, setIsImportPlaylist] = useState(false)
+  const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
+  const [playlistError, setPlaylistError] = useState<string | null>(null)
+  const [importedParts, setImportedParts] = useState<PlaylistPart[]>([])
+  const [showPlaylistPreview, setShowPlaylistPreview] = useState(false)
+  const [fallbackLinksText, setFallbackLinksText] = useState('')
+  const [showFallbackManualInput, setShowFallbackManualInput] = useState(false)
+
   const platform: Platform = url ? detectPlatform(url) : 'web'
 
   // Initialize or handle editingPin / initialUrl change
@@ -149,6 +163,13 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
         setCoverPreview(editingPin.customThumbnailUrl || null)
         setThumbDbKey(editingPin.thumbnailDbKey)
         setUrlError('')
+        if (editingPin.parts && editingPin.parts.length > 0) {
+          setImportedParts(editingPin.parts)
+          setIsImportPlaylist(true)
+        } else {
+          setImportedParts([])
+          setIsImportPlaylist(false)
+        }
       } else {
         const defaultCat =
           activeCategory && activeCategory !== 'all' ? activeCategory : collections[0]?.id || 'video'
@@ -156,6 +177,9 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
         setBatchCategory(defaultCat)
         setPlaylistCategory(defaultCat)
         setNote('')
+        setDetectedPlaylistId(null)
+        setIsImportPlaylist(false)
+        setImportedParts([])
 
         if (initialUrl) {
           handleUrlInput(initialUrl)
@@ -184,8 +208,85 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
         { id: uid(), title: 'Часть 1', url: '' },
         { id: uid(), title: 'Часть 2', url: '' },
       ])
+      setDetectedPlaylistId(null)
+      setIsImportPlaylist(false)
+      setIsLoadingPlaylist(false)
+      setPlaylistError(null)
+      setImportedParts([])
+      setShowPlaylistPreview(false)
+      setFallbackLinksText('')
+      setShowFallbackManualInput(false)
     }
   }, [open, initialUrl, editingPin, activeCategory, collections])
+
+  // Load playlist videos from RSS feed via CORS proxy
+  const handleLoadPlaylist = async (playlistId: string) => {
+    setIsLoadingPlaylist(true)
+    setPlaylistError(null)
+    setShowFallbackManualInput(false)
+
+    try {
+      const res = await fetchPlaylistVideos(playlistId)
+      setIsLoadingPlaylist(false)
+
+      if (res.success && res.videos.length > 0) {
+        if (res.title && !title) {
+          setTitle(res.title)
+        }
+        if (res.author && !channelName) {
+          setChannelName(res.author)
+        }
+        if (res.videos[0]?.thumbnail && !autoThumbUrl && !coverPreview) {
+          setAutoThumbUrl(res.videos[0].thumbnail)
+        }
+        const parts: PlaylistPart[] = res.videos.map((v, i) => ({
+          id: uid(),
+          title: v.title || `Часть ${i + 1}`,
+          url: v.url,
+          isCompleted: false,
+        }))
+        setImportedParts(parts)
+        setIsImportPlaylist(true)
+        setShowPlaylistPreview(true)
+      } else {
+        setPlaylistError(res.error || 'Не удалось получить список видео из плейлиста.')
+        setShowFallbackManualInput(true)
+      }
+    } catch {
+      setIsLoadingPlaylist(false)
+      setPlaylistError('Сетевая ошибка при запросе к прокси.')
+      setShowFallbackManualInput(true)
+    }
+  }
+
+  const handleToggleImportPlaylist = (checked: boolean) => {
+    setIsImportPlaylist(checked)
+    if (checked && detectedPlaylistId && importedParts.length === 0) {
+      void handleLoadPlaylist(detectedPlaylistId)
+    }
+  }
+
+  const handleApplyManualLinks = () => {
+    const lines = fallbackLinksText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+    if (lines.length === 0) return
+    const parts: PlaylistPart[] = lines.map((link, idx) => {
+      const ytId = extractYouTubeId(link)
+      return {
+        id: uid(),
+        title: ytId ? `Видео #${idx + 1}` : `Часть ${idx + 1}`,
+        url: link,
+        isCompleted: false,
+      }
+    })
+    setImportedParts(parts)
+    setIsImportPlaylist(true)
+    setPlaylistError(null)
+    setShowFallbackManualInput(false)
+    setShowPlaylistPreview(true)
+  }
 
   // Handle URL change with auto-detection & metadata fetch
   const handleUrlInput = async (val: string) => {
@@ -195,7 +296,18 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
     if (!trimmed) {
       setAutoThumbUrl(null)
+      setDetectedPlaylistId(null)
       return
+    }
+
+    // Check for YouTube playlist parameter (list=...)
+    const pId = extractPlaylistId(trimmed)
+    if (pId) {
+      setDetectedPlaylistId(pId)
+      setIsImportPlaylist(true)
+      void handleLoadPlaylist(pId)
+    } else {
+      setDetectedPlaylistId(null)
     }
 
     const detectedPlat = detectPlatform(trimmed)
@@ -309,23 +421,38 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     const lectNum = isLecture && lectureNum ? parseInt(lectureNum) : undefined
     const lectTot = isLecture && totalLectures ? parseInt(totalLectures) : undefined
 
+    const finalParts: PlaylistPart[] | undefined =
+      isImportPlaylist && importedParts.length > 0
+        ? importedParts
+        : editingPin?.parts
+
+    const finalContentType: ContentType =
+      finalParts && finalParts.length > 0
+        ? contentType === 'lecture'
+          ? 'lecture'
+          : 'series'
+        : contentType
+
+    const calculatedTotalEp = finalParts && finalParts.length > 0 ? finalParts.length : epTot
+
     const now = new Date().toISOString()
     const targetPin: Pin = {
       id: editingPin ? editingPin.id : uid(),
       title: title.trim(),
-      url: url.trim(),
+      url: finalParts && finalParts[0] && !url.trim() ? finalParts[0].url : url.trim(),
       platform,
-      contentType,
+      contentType: finalContentType,
       category,
       status,
       thumbnailUrl: autoThumbUrl || undefined,
       customThumbnailUrl: coverPreview || undefined,
       thumbnailDbKey: thumbDbKey,
       timecode: timecode.trim() || undefined,
-      currentEp: epCur,
-      totalEp: epTot,
-      currentEpisode: epCur,
-      totalEpisodes: epTot,
+      currentEp: epCur || (finalParts ? 1 : undefined),
+      totalEp: calculatedTotalEp,
+      currentEpisode: epCur || (finalParts ? 1 : undefined),
+      totalEpisodes: calculatedTotalEp,
+      parts: finalParts,
       dubStudio: isEpisodic && dubStudio ? dubStudio.trim() : undefined,
       rating: isEpisodic ? rating : undefined,
       lectureNumber: lectNum,
@@ -588,6 +715,111 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                   {urlError && (
                     <div className="flex items-center gap-1 mt-1 text-xs text-red-400">
                       <AlertCircle size={12} /> {urlError}
+                    </div>
+                  )}
+
+                  {/* ── YouTube Playlist detected banner ── */}
+                  {detectedPlaylistId && (
+                    <div className="mt-2.5 p-3 rounded-2xl bg-[rgba(243,229,171,0.04)] border border-[#f3e5ab]/30 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-[#f3e5ab] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isImportPlaylist}
+                            onChange={(e) => handleToggleImportPlaylist(e.target.checked)}
+                            className="w-4 h-4 rounded border-white/20 text-[#f3e5ab] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#f3e5ab]"
+                          />
+                          <span>Импортировать как плейлист</span>
+                          <span className="text-[10px] mono px-1.5 py-0.5 rounded bg-black/40 text-white/60">
+                            list={detectedPlaylistId.slice(0, 14)}...
+                          </span>
+                        </label>
+
+                        {isImportPlaylist && !isLoadingPlaylist && importedParts.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleLoadPlaylist(detectedPlaylistId)}
+                            className="px-2.5 py-1 rounded-lg btn-gold text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Sparkles size={12} /> Загрузить через RSS
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Loading State */}
+                      {isLoadingPlaylist && (
+                        <div className="flex items-center gap-2 text-xs text-white/70 py-1">
+                          <Loader2 size={14} className="animate-spin text-[#f3e5ab]" />
+                          <span>Подтягиваем список видео через RSS YouTube...</span>
+                        </div>
+                      )}
+
+                      {/* Success state: show count and toggle preview */}
+                      {isImportPlaylist && importedParts.length > 0 && (
+                        <div className="space-y-1.5 pt-1 border-t border-white/10">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-emerald-400 font-medium flex items-center gap-1">
+                              <Check size={13} /> Загружено видео: {importedParts.length}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowPlaylistPreview(!showPlaylistPreview)}
+                              className="text-[11px] text-[#f3e5ab] hover:underline cursor-pointer flex items-center gap-0.5"
+                            >
+                              <span>{showPlaylistPreview ? 'Свернуть трек-лист' : 'Показать трек-лист'}</span>
+                              {showPlaylistPreview ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                            </button>
+                          </div>
+
+                          {showPlaylistPreview && (
+                            <div className="max-h-36 overflow-y-auto space-y-1 pr-1 bg-black/30 p-2 rounded-xl border border-white/5">
+                              {importedParts.map((p, idx) => (
+                                <div
+                                  key={p.id}
+                                  className="text-xs text-white/80 truncate flex items-center gap-2 py-0.5"
+                                >
+                                  <span className="mono text-[10px] text-[#f3e5ab] font-bold">
+                                    #{idx + 1}
+                                  </span>
+                                  <span className="truncate">{p.title}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Fallback state: if RSS failed or manual input requested */}
+                      {isImportPlaylist && (showFallbackManualInput || playlistError) && (
+                        <div className="space-y-2 pt-1 border-t border-white/10">
+                          <p className="text-xs text-amber-300/90 leading-relaxed">
+                            {playlistError || 'Прокси не ответил.'} Вставьте список ссылок вручную:
+                          </p>
+                          <textarea
+                            value={fallbackLinksText}
+                            onChange={(e) => setFallbackLinksText(e.target.value)}
+                            placeholder="Вставьте ссылки на ролики по одной на строку:&#10;https://youtube.com/watch?v=...&#10;https://youtube.com/watch?v=..."
+                            rows={3}
+                            className="w-full bg-black/40 border border-white/15 rounded-xl p-2.5 text-xs text-white/90 placeholder:text-white/25 focus:border-[#f3e5ab] font-mono leading-relaxed"
+                          />
+                          <div className="flex items-center gap-2 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleLoadPlaylist(detectedPlaylistId)}
+                              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white/70 cursor-pointer"
+                            >
+                              Повторить RSS
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleApplyManualLinks}
+                              className="px-3 py-1 rounded-lg btn-gold text-xs font-semibold cursor-pointer shadow-md"
+                            >
+                              Сформировать части
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

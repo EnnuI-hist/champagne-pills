@@ -1,4 +1,4 @@
-import type { Pin, AppData, QuickLink, Collection } from '../types'
+import type { Pin, AppData, QuickLink, Collection, AnimeItem } from '../types'
 import { DEFAULT_COLLECTIONS } from '../types'
 import { uid } from '../utils'
 
@@ -6,6 +6,7 @@ const STORAGE_KEY = 'cp_data'
 const LEGACY_KEY = 'pinvault_data'
 const DOCK_KEY = 'cp_quickdock'
 const COLLECTIONS_KEY = 'cp_collections'
+const ANIME_KEY = 'champagne_anime_list'
 const VERSION = '2.1.0'
 
 /* ───── Migration ───── */
@@ -90,12 +91,65 @@ export function saveCollections(collections: Collection[]): void {
   localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections))
 }
 
+/* ───── Anime Tracker ───── */
+export function loadAnimeList(): AnimeItem[] {
+  try {
+    const raw = localStorage.getItem(ANIME_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as AnimeItem[]
+      if (Array.isArray(parsed)) return parsed
+    }
+    return [
+      {
+        id: uid(),
+        title: 'Атака титанов (Attack on Titan)',
+        note: 'Все 4 сезона + финальные спецвыпуски',
+        totalEpisodes: 89,
+        isCompleted: true,
+        rating: 10,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: uid(),
+        title: 'Магическая битва (Jujutsu Kaisen)',
+        note: '2 сезон + арка Инцидент в Сибуе',
+        totalEpisodes: 47,
+        isCompleted: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: uid(),
+        title: 'Провожающая в последний путь Фрирен',
+        note: 'Шедевр фэнтези от Madhouse',
+        totalEpisodes: 28,
+        isCompleted: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]
+  } catch {
+    return []
+  }
+}
+
+export function saveAnimeList(items: AnimeItem[]): void {
+  localStorage.setItem(ANIME_KEY, JSON.stringify(items))
+}
+
 /* ───── Export / Import ───── */
-export function exportToJson(pins: Pin[], quickLinks: QuickLink[], collections?: Collection[]): void {
+export function exportToJson(
+  pins: Pin[],
+  quickLinks: QuickLink[],
+  collections?: Collection[],
+  animeList?: AnimeItem[]
+): void {
   const data: AppData = {
     pins: pins.filter(p => p.status !== 'deleted'),
     quickLinks,
     collections,
+    animeList,
     exportedAt: new Date().toISOString(),
     version: VERSION,
   }
@@ -107,17 +161,27 @@ export function exportToJson(pins: Pin[], quickLinks: QuickLink[], collections?:
   URL.revokeObjectURL(a.href)
 }
 
-export function exportToClipboard(pins: Pin[], collections?: Collection[]): string {
+export function exportToClipboard(
+  pins: Pin[],
+  collections?: Collection[],
+  animeList?: AnimeItem[]
+): string {
   const data: AppData = {
     pins: pins.filter(p => p.status !== 'deleted'),
     collections,
+    animeList,
     exportedAt: new Date().toISOString(),
     version: VERSION,
   }
   return JSON.stringify(data)
 }
 
-export function importFromJson(file: File): Promise<{ pins: Pin[]; quickLinks?: QuickLink[]; collections?: Collection[] }> {
+export function importFromJson(file: File): Promise<{
+  pins: Pin[]
+  quickLinks?: QuickLink[]
+  collections?: Collection[]
+  animeList?: AnimeItem[]
+}> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -129,6 +193,9 @@ export function importFromJson(file: File): Promise<{ pins: Pin[]; quickLinks?: 
           pins: pins.map(p => ({ ...p, id: p.id || uid() })),
           quickLinks: data.quickLinks,
           collections: data.collections,
+          animeList: Array.isArray(data.animeList)
+            ? data.animeList.map((a: AnimeItem) => ({ ...a, id: a.id || uid() }))
+            : undefined,
         })
       } catch (err) { reject(err) }
     }
