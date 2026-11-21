@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "cmd /c \"set PATH=C:\\Users\\EnnuI\\.gemini\\antigravity\\tools\\mingit\\cmd;%PATH% && gh-pages -d dist\""
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.5",
