@@ -217,6 +217,25 @@ export default function App() {
     setCategory(col.id)
   }
 
+  // Import playlist as a new collection/tab with individual video pins
+  const handleImportPlaylistAsCollection = (collectionName: string, newPins: Pin[]) => {
+    const newColId = `col_${uid()}`
+    const newCol: Collection = {
+      id: newColId,
+      name: collectionName,
+      emoji: '📺',
+      color: '#ff2a85',
+    }
+    handleSaveCollection(newCol)
+    newPins.forEach((p) => {
+      addPin({
+        ...p,
+        category: newColId,
+      })
+    })
+    setCategory(newColId)
+  }
+
   const handleDeleteCollection = (id: string) => {
     setCollections((prev) => {
       const updated = prev.filter((c) => c.id !== id)
@@ -300,9 +319,12 @@ export default function App() {
         const updatedParts = target.parts.map((pt) =>
           pt.id === partId ? { ...pt, isCompleted: !pt.isCompleted } : pt,
         )
+        const completedCount = updatedParts.filter((p) => p.isCompleted).length
         const updatedPin = {
           ...target,
           parts: updatedParts,
+          currentEpisode: Math.min(updatedParts.length, completedCount + 1),
+          currentEp: Math.min(updatedParts.length, completedCount + 1),
           updatedAt: new Date().toISOString(),
         }
         updatePin(updatedPin)
@@ -519,6 +541,7 @@ export default function App() {
         onUpdate={updatePin}
         editingPin={editingPin}
         onAddBatch={handleAddBatch}
+        onImportPlaylistAsCollection={handleImportPlaylistAsCollection}
         initialUrl={initialPasteUrl}
         collections={collections}
         onOpenAddCollection={() => {

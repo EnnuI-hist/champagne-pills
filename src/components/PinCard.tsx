@@ -112,6 +112,27 @@ export const PinCard: React.FC<PinCardProps> = ({
     ? Math.round((completedPartsCount / Math.max(1, totalPartsCount)) * 100)
     : 0
 
+  const currentVideoNum =
+    nextPartIndex !== -1
+      ? nextPartIndex + 1
+      : totalPartsCount > 0
+      ? totalPartsCount
+      : 1
+
+  const handlePlaylistStep = (delta: number) => {
+    if (!pin.parts || pin.parts.length === 0) return
+    if (delta > 0) {
+      if (nextUnwatchedPart && onTogglePart) {
+        onTogglePart(pin.id, nextUnwatchedPart.id)
+      }
+    } else {
+      const lastCompleted = [...pin.parts].reverse().find((p) => p.isCompleted)
+      if (lastCompleted && onTogglePart) {
+        onTogglePart(pin.id, lastCompleted.id)
+      }
+    }
+  }
+
   // Primary action button label
   const primaryButtonLabel = hasParts
     ? isAllPartsCompleted
@@ -277,24 +298,48 @@ export const PinCard: React.FC<PinCardProps> = ({
           </div>
 
           {/* Multi-part Playlist Support */}
+          {/* Multi-part Playlist Support */}
           {hasParts && (
             <div
               className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Header with counter `Видео X / Y` with - and + buttons */}
               <div className="flex items-center justify-between text-xs">
-                <button
-                  type="button"
-                  onClick={() => setShowParts(!showParts)}
-                  className="flex items-center gap-1.5 text-[#f3e5ab] font-semibold hover:underline cursor-pointer"
-                >
-                  <ListVideo size={13} />
-                  <span>Плейлист ({completedPartsCount}/{totalPartsCount})</span>
-                  {showParts ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
-                <span className="text-[10px] text-[#f3e5ab] mono font-bold">
-                  {partsProgressPercent}%
-                </span>
+                <div className="flex items-center gap-1.5 text-white/90">
+                  <ListVideo size={13} className="text-[#ff2a85]" />
+                  <span className="mono font-semibold text-[#f3e5ab]">
+                    Видео {currentVideoNum} / {totalPartsCount}
+                  </span>
+                  <span className="text-[10px] text-[#ff2a85] font-bold mono">
+                    ({partsProgressPercent}%)
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handlePlaylistStep(-1)
+                    }}
+                    className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 hover:text-white flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
+                    title="Предыдущее видео (снять отметку)"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handlePlaylistStep(1)
+                    }}
+                    className="w-6 h-6 rounded-lg btn-rose text-white flex items-center justify-center font-bold text-xs cursor-pointer shadow-md transition-transform hover:scale-105"
+                    title="Следующее видео (+1, отметить)"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
 
               {/* Progress bar of parts */}
@@ -340,6 +385,18 @@ export const PinCard: React.FC<PinCardProps> = ({
                   )}
                 </div>
               ) : null}
+
+              {/* Collapsible toggle button */}
+              <div className="flex items-center justify-between pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowParts(!showParts)}
+                  className="flex items-center gap-1.5 text-[11px] text-[#f3e5ab]/80 hover:text-[#f3e5ab] font-medium transition-colors cursor-pointer"
+                >
+                  <span>{showParts ? 'Свернуть трек-лист' : `Список роликов (${completedPartsCount}/${totalPartsCount})`}</span>
+                  {showParts ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                </button>
+              </div>
 
               {/* Collapsible parts list */}
               {showParts && (
@@ -404,7 +461,7 @@ export const PinCard: React.FC<PinCardProps> = ({
           )}
 
           {/* Episodic Tracker controls (- and +1 right on card) */}
-          {isEpisodic && (
+          {isEpisodic && !hasParts && (
             <div
               className="p-2 sm:p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5"
               onClick={(e) => e.stopPropagation()}
@@ -456,7 +513,7 @@ export const PinCard: React.FC<PinCardProps> = ({
           )}
 
           {/* Non-episodic Timecode Tracker Box (Regular videos, lectures, essays) */}
-          {!isEpisodic && (
+          {!isEpisodic && !hasParts && (
             <div
               className="p-2 sm:p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-xs"
               onClick={(e) => e.stopPropagation()}

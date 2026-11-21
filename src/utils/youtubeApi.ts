@@ -145,7 +145,54 @@ export function extractPlaylistId(url: string): string | null {
   return m ? m[1] : null
 }
 
-// ─── Playlist RSS fetch via CORS proxy ──────────────────────────────────────
+// ─── Playlist Metadata (Title, Author, Thumbnail) ───────────────────────────
+
+export interface PlaylistMeta {
+  title?: string
+  author?: string
+  thumbnail?: string
+}
+
+export async function fetchPlaylistMetadata(playlistId: string): Promise<PlaylistMeta> {
+  const result: PlaylistMeta = {}
+
+  // 1. Official YouTube oEmbed endpoint (very fast, reliable)
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/playlist?list=${encodeURIComponent(
+      playlistId,
+    )}&format=json`
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(3500) })
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.title) result.title = data.title
+      if (data?.author_name) result.author = data.author_name
+      if (data?.thumbnail_url) result.thumbnail = data.thumbnail_url
+      if (result.title) return result
+    }
+  } catch {
+    // Continue to fallback
+  }
+
+  // 2. Noembed fallback
+  try {
+    const noembedUrl = `https://noembed.com/embed?url=https://www.youtube.com/playlist?list=${encodeURIComponent(
+      playlistId,
+    )}`
+    const res = await fetch(noembedUrl, { signal: AbortSignal.timeout(3500) })
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.title && !result.title) result.title = data.title
+      if (data?.author_name && !result.author) result.author = data.author_name
+      if (data?.thumbnail_url && !result.thumbnail) result.thumbnail = data.thumbnail_url
+    }
+  } catch {
+    // Graceful fallback
+  }
+
+  return result
+}
+
+// ─── Playlist RSS fetch via CORS proxies ─────────────────────────────────────
 
 export interface PlaylistVideo {
   id: string
@@ -158,37 +205,76 @@ export interface PlaylistFeedResult {
   success: boolean
   title?: string
   author?: string
+  thumbnail?: string
   videos: PlaylistVideo[]
   error?: string
 }
 
-export async function fetchPlaylistVideos(playlistId: string): Promise<PlaylistFeedResult> {
-  try {
-    const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`
+/**
+ * Loads YouTube playlist metadata & video list from official RSS feed:
+ * https://www.youtube.com/feeds/videos.xml?playlist_id=...
+ * Uses multiple CORS proxies in sequence with quick timeouts.
+ * Never blocks playlist saving if proxies are unavailable.
+ */
+export async function fetchYoutubePlaylist(playlistId: string): Promise<PlaylistFeedResult> {
+  // Concurrently fetch metadata for fastest title & thumbnail display
+  const metaPromise = fetchPlaylistMetadata(playlistId)
 
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(9000) })
-    if (!res.ok) {
-      return { success: false, videos: [], error: `Сервер вернул статус ${res.status}` }
+  const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`
+
+  // Sequential proxy candidates
+  const proxyEndpoints: ((url: string) => string)[] = [
+    (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  ]
+
+  let xmlText = ''
+
+  for (const buildProxyUrl of proxyEndpoints) {
+    try {
+      const proxyUrl = buildProxyUrl(feedUrl)
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(4000) })
+      if (!res.ok) continue
+
+      if (proxyUrl.includes('/get?url=')) {
+        const json = await res.json()
+        const content = json?.contents
+        if (typeof content === 'string' && (content.includes('<feed') || content.includes('<entry'))) {
+          xmlText = content
+          break
+        }
+      } else {
+        const text = await res.text()
+        if (typeof text === 'string' && (text.includes('<feed') || text.includes('<entry'))) {
+          xmlText = text
+          break
+        }
+      }
+    } catch {
+      // Try next proxy candidate
     }
+  }
 
-    const json = await res.json()
-    const xmlText: string = json?.contents || ''
-    if (!xmlText || typeof xmlText !== 'string' || !xmlText.includes('<feed')) {
-      return { success: false, videos: [], error: 'Не удалось получить XML-фид плейлиста' }
-    }
+  const meta = await metaPromise
+  let playlistTitle = meta.title || ''
+  let authorName = meta.author || ''
+  let playlistThumb = meta.thumbnail || ''
+  const videos: PlaylistVideo[] = []
 
-    let playlistTitle = ''
-    let authorName = ''
-    const videos: PlaylistVideo[] = []
-
-    // 1. Try DOMParser
+  if (xmlText) {
+    // 1. DOMParser
     try {
       const parser = new DOMParser()
       const doc = parser.parseFromString(xmlText, 'application/xml')
 
-      playlistTitle = doc.querySelector('feed > title')?.textContent?.trim() || ''
-      authorName = doc.querySelector('feed > author > name')?.textContent?.trim() || ''
+      if (!playlistTitle) {
+        playlistTitle = doc.querySelector('feed > title')?.textContent?.trim() || ''
+      }
+      if (!authorName) {
+        authorName = doc.querySelector('feed > author > name')?.textContent?.trim() || ''
+      }
 
       const entries = Array.from(doc.querySelectorAll('entry'))
       for (const entry of entries) {
@@ -200,7 +286,7 @@ export async function fetchPlaylistVideos(playlistId: string): Promise<PlaylistF
 
         const title =
           entry.getElementsByTagName('title')[0]?.textContent?.trim() ||
-          `Видео ${videoId}`
+          (videoId ? `Видео ${videoId}` : '')
 
         if (videoId) {
           videos.push({
@@ -212,10 +298,10 @@ export async function fetchPlaylistVideos(playlistId: string): Promise<PlaylistF
         }
       }
     } catch {
-      // ignore parser error, proceed to regex
+      // Ignore and proceed to regex fallback
     }
 
-    // 2. Regex fallback if DOMParser missed entries due to namespace issues
+    // 2. Regex fallback for namespace quirks
     if (videos.length === 0) {
       const entryRegex = /<entry[\s\S]*?<\/entry>/gi
       const entryMatches = xmlText.match(entryRegex) || []
@@ -244,19 +330,31 @@ export async function fetchPlaylistVideos(playlistId: string): Promise<PlaylistF
         }
       }
     }
+  }
 
-    if (videos.length === 0) {
-      return { success: false, videos: [], error: 'В фиде плейлиста не обнаружено роликов' }
-    }
+  if (!playlistThumb && videos.length > 0 && videos[0].thumbnail) {
+    playlistThumb = videos[0].thumbnail
+  }
 
+  if (videos.length === 0) {
     return {
-      success: true,
+      success: false,
       title: playlistTitle || undefined,
       author: authorName || undefined,
-      videos,
+      thumbnail: playlistThumb || undefined,
+      videos: [],
+      error: 'Прокси временно недоступны или плейлист закрытый. Сохраните плейлист или вставьте список ссылок вручную.',
     }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Ошибка соединения'
-    return { success: false, videos: [], error: msg }
+  }
+
+  return {
+    success: true,
+    title: playlistTitle || undefined,
+    author: authorName || undefined,
+    thumbnail: playlistThumb || undefined,
+    videos,
   }
 }
+
+// Backward-compatible alias
+export const fetchPlaylistVideos = fetchYoutubePlaylist

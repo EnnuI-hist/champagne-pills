@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import type { Pin, Platform, ContentType, Category, Status, Collection, PlaylistPart } from '../types'
 import { detectPlatform, extractYouTubeId, uid, guessCategory, inferContentType } from '../utils'
-import { extractPlaylistId, fetchPlaylistVideos } from '../utils/youtubeApi'
+import { extractPlaylistId, fetchYoutubePlaylist } from '../utils/youtubeApi'
 import { fetchVideoMeta, youtubeHqThumb } from '../utils/metadata'
 import { compressImageToWebp, saveBlob } from '../utils/db'
 import { PlatformBadge } from './Badges'
@@ -37,6 +37,7 @@ interface AddPinModalProps {
   onUpdate?: (pin: Pin) => void
   editingPin?: Pin | null
   onAddBatch?: (pins: Pin[]) => void
+  onImportPlaylistAsCollection?: (collectionName: string, pins: Pin[]) => void
   initialUrl?: string
   collections: Collection[]
   onOpenAddCollection?: () => void
@@ -72,6 +73,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   onUpdate,
   editingPin,
   onAddBatch,
+  onImportPlaylistAsCollection,
   initialUrl = '',
   collections,
   onOpenAddCollection,
@@ -125,6 +127,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
   // Playlist Auto-Import State
   const [detectedPlaylistId, setDetectedPlaylistId] = useState<string | null>(null)
+  const [playlistSaveMode, setPlaylistSaveMode] = useState<'card' | 'collection'>('card')
   const [isImportPlaylist, setIsImportPlaylist] = useState(false)
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
   const [playlistError, setPlaylistError] = useState<string | null>(null)
@@ -219,52 +222,48 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     }
   }, [open, initialUrl, editingPin, activeCategory, collections])
 
-  // Load playlist videos from RSS feed via CORS proxy
+  // Load playlist videos from RSS feed via CORS proxies & metadata
   const handleLoadPlaylist = async (playlistId: string) => {
     setIsLoadingPlaylist(true)
     setPlaylistError(null)
-    setShowFallbackManualInput(false)
 
     try {
-      const res = await fetchPlaylistVideos(playlistId)
+      const res = await fetchYoutubePlaylist(playlistId)
       setIsLoadingPlaylist(false)
 
-      if (res.success && res.videos.length > 0) {
-        if (res.title && !title) {
-          setTitle(res.title)
-        }
-        if (res.author && !channelName) {
-          setChannelName(res.author)
-        }
-        if (res.videos[0]?.thumbnail && !autoThumbUrl && !coverPreview) {
-          setAutoThumbUrl(res.videos[0].thumbnail)
-        }
+      if (res.title && !title) {
+        setTitle(res.title)
+      }
+      if (res.author && !channelName) {
+        setChannelName(res.author)
+      }
+      if (res.thumbnail && !autoThumbUrl && !coverPreview) {
+        setAutoThumbUrl(res.thumbnail)
+      }
+
+      if (res.videos.length > 0) {
         const parts: PlaylistPart[] = res.videos.map((v, i) => ({
           id: uid(),
-          title: v.title || `Часть ${i + 1}`,
+          title: v.title || `Видео #${i + 1}`,
           url: v.url,
           isCompleted: false,
         }))
         setImportedParts(parts)
         setIsImportPlaylist(true)
-        setShowPlaylistPreview(true)
       } else {
-        setPlaylistError(res.error || 'Не удалось получить список видео из плейлиста.')
-        setShowFallbackManualInput(true)
+        setPlaylistError(
+          res.error ||
+            'Прокси временно не ответил. Плейлист всё равно можно сохранить в 1 клик.',
+        )
       }
     } catch {
       setIsLoadingPlaylist(false)
-      setPlaylistError('Сетевая ошибка при запросе к прокси.')
-      setShowFallbackManualInput(true)
+      setPlaylistError(
+        'Прокси временно не ответил. Плейлист всё равно можно сохранить в 1 клик.',
+      )
     }
   }
 
-  const handleToggleImportPlaylist = (checked: boolean) => {
-    setIsImportPlaylist(checked)
-    if (checked && detectedPlaylistId && importedParts.length === 0) {
-      void handleLoadPlaylist(detectedPlaylistId)
-    }
-  }
 
   const handleApplyManualLinks = () => {
     const lines = fallbackLinksText
@@ -421,6 +420,52 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     const lectNum = isLecture && lectureNum ? parseInt(lectureNum) : undefined
     const lectTot = isLecture && totalLectures ? parseInt(totalLectures) : undefined
 
+    const now = new Date().toISOString()
+
+    // ── Mode B: Import playlist as a new collection / tab ──
+    if (detectedPlaylistId && playlistSaveMode === 'collection' && onImportPlaylistAsCollection) {
+      const playlistName = title.trim() || 'Плейлист YouTube'
+      const generatedPins: Pin[] =
+        importedParts.length > 0
+          ? importedParts.map((p, idx) => {
+              const ytId = extractYouTubeId(p.url)
+              return {
+                id: uid(),
+                title: p.title.trim() || `Видео #${idx + 1}`,
+                url: p.url,
+                platform: 'youtube' as Platform,
+                contentType: 'video' as ContentType,
+                category: '',
+                status: 'watching' as Status,
+                thumbnailUrl: ytId ? youtubeHqThumb(ytId) : autoThumbUrl || undefined,
+                channelName: channelName.trim() || undefined,
+                isPinned: idx === 0,
+                createdAt: now,
+                updatedAt: now,
+              }
+            })
+          : [
+              {
+                id: uid(),
+                title: playlistName,
+                url: url.trim(),
+                platform: 'youtube' as Platform,
+                contentType: 'series' as ContentType,
+                category: '',
+                status: 'watching' as Status,
+                thumbnailUrl: autoThumbUrl || undefined,
+                channelName: channelName.trim() || undefined,
+                isPinned: true,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ]
+
+      onImportPlaylistAsCollection(playlistName, generatedPins)
+      onClose()
+      return
+    }
+
     const finalParts: PlaylistPart[] | undefined =
       isImportPlaylist && importedParts.length > 0
         ? importedParts
@@ -435,7 +480,6 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
     const calculatedTotalEp = finalParts && finalParts.length > 0 ? finalParts.length : epTot
 
-    const now = new Date().toISOString()
     const targetPin: Pin = {
       id: editingPin ? editingPin.id : uid(),
       title: title.trim(),
@@ -720,46 +764,104 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
                   {/* ── YouTube Playlist detected banner ── */}
                   {detectedPlaylistId && (
-                    <div className="mt-2.5 p-3 rounded-2xl bg-[rgba(243,229,171,0.04)] border border-[#f3e5ab]/30 space-y-2.5">
+                    <div className="mt-2.5 p-3.5 rounded-2xl bg-[rgba(255,42,133,0.03)] border border-[#ff2a85]/30 space-y-3 shadow-[0_0_20px_rgba(255,42,133,0.06)]">
+                      {/* Top info row */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <label className="flex items-center gap-2 text-xs font-semibold text-[#f3e5ab] cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isImportPlaylist}
-                            onChange={(e) => handleToggleImportPlaylist(e.target.checked)}
-                            className="w-4 h-4 rounded border-white/20 text-[#f3e5ab] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#f3e5ab]"
-                          />
-                          <span>Импортировать как плейлист</span>
-                          <span className="text-[10px] mono px-1.5 py-0.5 rounded bg-black/40 text-white/60">
-                            list={detectedPlaylistId.slice(0, 14)}...
-                          </span>
-                        </label>
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg btn-rose text-[#ff2a85]">
+                            <ListVideo size={14} />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              Обнаружен плейлист YouTube
+                              {isLoadingPlaylist && (
+                                <Loader2 size={12} className="animate-spin text-[#f3e5ab]" />
+                              )}
+                            </span>
+                            <span className="text-[10px] mono text-white/40">
+                              list={detectedPlaylistId.slice(0, 16)}...
+                            </span>
+                          </div>
+                        </div>
 
-                        {isImportPlaylist && !isLoadingPlaylist && importedParts.length === 0 && (
-                          <button
-                            type="button"
-                            onClick={() => handleLoadPlaylist(detectedPlaylistId)}
-                            className="px-2.5 py-1 rounded-lg btn-gold text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                          >
-                            <Sparkles size={12} /> Загрузить через RSS
-                          </button>
+                        {importedParts.length > 0 && (
+                          <span className="text-xs text-emerald-400 font-medium flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg">
+                            <Check size={12} /> Найдено видео: {importedParts.length}
+                          </span>
                         )}
                       </div>
 
-                      {/* Loading State */}
-                      {isLoadingPlaylist && (
-                        <div className="flex items-center gap-2 text-xs text-white/70 py-1">
-                          <Loader2 size={14} className="animate-spin text-[#f3e5ab]" />
-                          <span>Подтягиваем список видео через RSS YouTube...</span>
-                        </div>
-                      )}
+                      {/* 2-Mode Selector (Режим А vs Режим Б) */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] text-white/40 block uppercase tracking-wider mono">
+                          Режим сохранения плейлиста в 1 клик:
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {/* Mode A: Card Playlist */}
+                          <button
+                            type="button"
+                            onClick={() => setPlaylistSaveMode('card')}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                              playlistSaveMode === 'card'
+                                ? 'bg-[#f3e5ab]/10 border-[#f3e5ab] text-white shadow-[0_0_12px_rgba(243,229,171,0.15)] ring-1 ring-[#f3e5ab]/40'
+                                : 'bg-white/[0.02] border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[#f3e5ab] flex items-center gap-1.5">
+                                🗂 Карточка-плейлист
+                              </span>
+                              {playlistSaveMode === 'card' && (
+                                <span className="text-[9px] mono px-1.5 py-0.2 rounded-full bg-[#f3e5ab]/20 text-[#f3e5ab] font-bold">
+                                  По умолчанию
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-white/50 leading-relaxed">
+                              1 карточка со счётчиком (1/{importedParts.length || 15}), прогресс-баром и списком роликов
+                            </p>
+                          </button>
 
-                      {/* Success state: show count and toggle preview */}
-                      {isImportPlaylist && importedParts.length > 0 && (
+                          {/* Mode B: New Section / Collection */}
+                          <button
+                            type="button"
+                            onClick={() => setPlaylistSaveMode('collection')}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                              playlistSaveMode === 'collection'
+                                ? 'bg-[#ff2a85]/10 border-[#ff2a85] text-white shadow-[0_0_12px_rgba(255,42,133,0.18)] ring-1 ring-[#ff2a85]/40'
+                                : 'bg-white/[0.02] border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[#ff2a85] flex items-center gap-1.5">
+                                📑 Новый раздел (вкладка)
+                              </span>
+                              {playlistSaveMode === 'collection' && (
+                                <span className="text-[9px] mono px-1.5 py-0.2 rounded-full bg-[#ff2a85]/20 text-[#ff2a85] font-bold">
+                                  Выбрано
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-white/50 leading-relaxed">
+                              Создаст вкладку «{title || 'Плейлист'}» и добавит все видео отдельными карточками
+                            </p>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Loading State or Track-list Toggle */}
+                      {isLoadingPlaylist ? (
+                        <div className="flex items-center gap-2 text-xs text-white/70 py-1">
+                          <Loader2 size={13} className="animate-spin text-[#f3e5ab]" />
+                          <span>Загружаем список видео через RSS YouTube...</span>
+                        </div>
+                      ) : importedParts.length > 0 ? (
                         <div className="space-y-1.5 pt-1 border-t border-white/10">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-emerald-400 font-medium flex items-center gap-1">
-                              <Check size={13} /> Загружено видео: {importedParts.length}
+                            <span className="text-white/60 text-[11px]">
+                              {playlistSaveMode === 'card'
+                                ? `В карточку будет добавлено ${importedParts.length} видео с интерактивным переключением`
+                                : `В новый раздел будет добавлено ${importedParts.length} карточек`}
                             </span>
                             <button
                               type="button"
@@ -772,7 +874,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                           </div>
 
                           {showPlaylistPreview && (
-                            <div className="max-h-36 overflow-y-auto space-y-1 pr-1 bg-black/30 p-2 rounded-xl border border-white/5">
+                            <div className="max-h-36 overflow-y-auto space-y-1 pr-1 bg-black/40 p-2 rounded-xl border border-white/10">
                               {importedParts.map((p, idx) => (
                                 <div
                                   key={p.id}
@@ -787,39 +889,53 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                             </div>
                           )}
                         </div>
-                      )}
+                      ) : null}
 
-                      {/* Fallback state: if RSS failed or manual input requested */}
-                      {isImportPlaylist && (showFallbackManualInput || playlistError) && (
-                        <div className="space-y-2 pt-1 border-t border-white/10">
-                          <p className="text-xs text-amber-300/90 leading-relaxed">
-                            {playlistError || 'Прокси не ответил.'} Вставьте список ссылок вручную:
-                          </p>
-                          <textarea
-                            value={fallbackLinksText}
-                            onChange={(e) => setFallbackLinksText(e.target.value)}
-                            placeholder="Вставьте ссылки на ролики по одной на строку:&#10;https://youtube.com/watch?v=...&#10;https://youtube.com/watch?v=..."
-                            rows={3}
-                            className="w-full bg-black/40 border border-white/15 rounded-xl p-2.5 text-xs text-white/90 placeholder:text-white/25 focus:border-[#f3e5ab] font-mono leading-relaxed"
-                          />
-                          <div className="flex items-center gap-2 justify-end">
+                      {/* Manual links input / fallback (Always accessible, never blocking) */}
+                      <div className="pt-1 border-t border-white/10 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => setShowFallbackManualInput(!showFallbackManualInput)}
+                            className="text-[11px] text-[#f3e5ab]/80 hover:text-[#f3e5ab] flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus size={11} />
+                            <span>Вставить ссылки списком (если нужно загрузить больше 15 видео)</span>
+                            {showFallbackManualInput ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                          </button>
+
+                          {playlistError && (
                             <button
                               type="button"
                               onClick={() => handleLoadPlaylist(detectedPlaylistId)}
-                              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white/70 cursor-pointer"
+                              className="text-[10px] text-white/50 hover:text-white underline cursor-pointer"
                             >
                               Повторить RSS
                             </button>
-                            <button
-                              type="button"
-                              onClick={handleApplyManualLinks}
-                              className="px-3 py-1 rounded-lg btn-gold text-xs font-semibold cursor-pointer shadow-md"
-                            >
-                              Сформировать части
-                            </button>
-                          </div>
+                          )}
                         </div>
-                      )}
+
+                        {showFallbackManualInput && (
+                          <div className="space-y-2 pt-1 bg-black/30 p-2.5 rounded-xl border border-white/5">
+                            <textarea
+                              value={fallbackLinksText}
+                              onChange={(e) => setFallbackLinksText(e.target.value)}
+                              placeholder="Вставьте ссылки на ролики по одной на строку:&#10;https://youtube.com/watch?v=...&#10;https://youtube.com/watch?v=..."
+                              rows={3}
+                              className="w-full bg-black/50 border border-white/15 rounded-xl p-2.5 text-xs text-white/90 placeholder:text-white/25 focus:border-[#f3e5ab] font-mono leading-relaxed"
+                            />
+                            <div className="flex items-center justify-end">
+                              <button
+                                type="button"
+                                onClick={handleApplyManualLinks}
+                                className="px-3 py-1 rounded-lg btn-gold text-xs font-semibold cursor-pointer shadow-md"
+                              >
+                                Сформировать видео ({fallbackLinksText.split('\n').filter((l) => l.trim().length > 0).length})
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1241,9 +1357,22 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2.5 rounded-xl btn-gold text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer"
+                    className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer transition-all ${
+                      detectedPlaylistId
+                        ? playlistSaveMode === 'collection'
+                          ? 'btn-rose text-white shadow-[0_0_16px_rgba(255,42,133,0.35)]'
+                          : 'btn-gold text-[#f3e5ab] shadow-[0_0_16px_rgba(243,229,171,0.25)]'
+                        : 'btn-gold text-[#f3e5ab]'
+                    }`}
                   >
-                    <Check size={14} /> {editingPin ? 'Сохранить изменения' : 'Создать закреп'}
+                    <Check size={14} />{' '}
+                    {editingPin
+                      ? 'Сохранить изменения'
+                      : detectedPlaylistId
+                      ? playlistSaveMode === 'collection'
+                        ? `Создать раздел и импортировать (${importedParts.length || 1})`
+                        : `Сохранить как плейлист (${importedParts.length || 1})`
+                      : 'Создать закреп'}
                   </button>
                 </div>
               </form>
