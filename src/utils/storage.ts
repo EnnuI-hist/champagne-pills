@@ -21,6 +21,30 @@ function migrateLegacy(): Pin[] | null {
 }
 
 /* ───── Pins ───── */
+export function sanitizePinForStorage(pin: Pin): Pin {
+  const clean = { ...pin }
+  // Heavy base64 images or blob URLs must never be saved in localStorage
+  if (clean.customThumbnailUrl) {
+    if (
+      clean.customThumbnailUrl.startsWith('data:') ||
+      clean.customThumbnailUrl.startsWith('blob:') ||
+      clean.customThumbnailUrl.length > 1024
+    ) {
+      delete clean.customThumbnailUrl
+    }
+  }
+  if (clean.thumbnailUrl) {
+    if (
+      clean.thumbnailUrl.startsWith('data:') ||
+      clean.thumbnailUrl.startsWith('blob:') ||
+      clean.thumbnailUrl.length > 1024
+    ) {
+      delete clean.thumbnailUrl
+    }
+  }
+  return clean
+}
+
 export function loadPins(): Pin[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -47,8 +71,26 @@ export function loadPins(): Pin[] {
 }
 
 export function savePins(pins: Pin[]): void {
-  const data: AppData = { pins, exportedAt: new Date().toISOString(), version: VERSION }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  try {
+    const cleanPins = pins.map(sanitizePinForStorage)
+    const data: AppData = { pins: cleanPins, exportedAt: new Date().toISOString(), version: VERSION }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch (err) {
+    console.error('Ошибка записи закрепов в localStorage:', err)
+    if (
+      err instanceof DOMException &&
+      (err.name === 'QuotaExceededError' ||
+        err.code === 22 ||
+        err.code === 1014 ||
+        err.name === 'NS_ERROR_DOM_QUOTA_REACHED')
+    ) {
+      if (typeof window !== 'undefined') {
+        alert(
+          'Внимание: локальное хранилище браузера (localStorage) переполнено!\n\nОчистите корзину или удалите ненужные закрепы, чтобы продолжить сохранение без потерь.',
+        )
+      }
+    }
+  }
 }
 
 /* ───── Quick Dock ───── */
@@ -61,7 +103,11 @@ export function loadQuickLinks(): QuickLink[] {
 }
 
 export function saveQuickLinks(links: QuickLink[]): void {
-  localStorage.setItem(DOCK_KEY, JSON.stringify(links))
+  try {
+    localStorage.setItem(DOCK_KEY, JSON.stringify(links))
+  } catch (err) {
+    console.error('Ошибка сохранения быстрых ссылок в localStorage:', err)
+  }
 }
 
 /* ───── Collections / Sections ───── */
@@ -88,7 +134,11 @@ export function loadCollections(): Collection[] {
 }
 
 export function saveCollections(collections: Collection[]): void {
-  localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections))
+  try {
+    localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections))
+  } catch (err) {
+    console.error('Ошибка сохранения разделов в localStorage:', err)
+  }
 }
 
 /* ───── Anime Tracker ───── */
@@ -135,7 +185,11 @@ export function loadAnimeList(): AnimeItem[] {
 }
 
 export function saveAnimeList(items: AnimeItem[]): void {
-  localStorage.setItem(ANIME_KEY, JSON.stringify(items))
+  try {
+    localStorage.setItem(ANIME_KEY, JSON.stringify(items))
+  } catch (err) {
+    console.error('Ошибка сохранения списка аниме в localStorage:', err)
+  }
 }
 
 /* ───── Export / Import ───── */

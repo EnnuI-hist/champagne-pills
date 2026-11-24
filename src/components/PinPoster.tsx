@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import type { Pin, Platform } from '../types'
 import { Tv, Film, Video, Globe, Play, Sparkles } from 'lucide-react'
 import { extractYouTubeId } from '../utils'
+import { getBlobUrl } from '../utils/db'
 
 interface PinPosterProps {
   pin: Pin
@@ -26,11 +27,29 @@ export const PinPoster: React.FC<PinPosterProps> = ({
   imgClassName = 'w-full h-full object-cover transition-transform duration-500 group-hover:scale-105',
 }) => {
   const [hasError, setHasError] = useState(false)
+  const [dbBlobUrl, setDbBlobUrl] = useState<string | null>(null)
+
+  // Asynchronously resolve custom compressed poster from IndexedDB if key exists
+  useEffect(() => {
+    let isMounted = true
+    if (pin.thumbnailDbKey) {
+      getBlobUrl(pin.thumbnailDbKey).then((url) => {
+        if (isMounted && url) {
+          setDbBlobUrl(url)
+        }
+      })
+    } else {
+      setDbBlobUrl(null)
+    }
+    return () => {
+      isMounted = false
+    }
+  }, [pin.thumbnailDbKey])
 
   // Auto-resolve YouTube preview if thumbnail not provided or is generic
   const ytId = extractYouTubeId(pin.url)
   const defaultYtThumb = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : ''
-  const imageUrl = pin.customThumbnailUrl || pin.thumbnailUrl || defaultYtThumb
+  const imageUrl = dbBlobUrl || pin.customThumbnailUrl || pin.thumbnailUrl || defaultYtThumb
 
   // Reset error when target image URL changes
   useEffect(() => {

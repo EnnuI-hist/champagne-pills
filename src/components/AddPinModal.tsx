@@ -25,8 +25,29 @@ import type { Pin, Platform, ContentType, Category, Status, Collection, Playlist
 import { detectPlatform, extractYouTubeId, uid, guessCategory, inferContentType } from '../utils'
 import { extractPlaylistId, fetchYoutubePlaylist } from '../utils/youtubeApi'
 import { fetchVideoMeta, youtubeHqThumb } from '../utils/metadata'
-import { compressImageToWebp, saveBlob } from '../utils/db'
+import { compressImageToWebp, saveBlob, getBlobUrl } from '../utils/db'
 import { PlatformBadge } from './Badges'
+
+export const getFallbackTitleFromUrl = (inputUrl: string): string => {
+  if (!inputUrl) return 'Новый закреп'
+  const trimmed = inputUrl.trim()
+  const ytId = extractYouTubeId(trimmed)
+  if (ytId) {
+    return `YouTube (${ytId})`
+  }
+  try {
+    const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+    const u = new URL(normalized)
+    const host = u.hostname.replace(/^www\./, '')
+    const pathSeg = u.pathname.split('/').filter(Boolean).pop()
+    if (pathSeg && pathSeg.length < 30) {
+      return `${host} / ${decodeURIComponent(pathSeg)}`
+    }
+    return host || trimmed
+  } catch {
+    return trimmed || 'Новый закреп'
+  }
+}
 
 type AddMode = 'single' | 'batch' | 'playlist'
 
@@ -165,6 +186,11 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
         setAutoThumbUrl(editingPin.thumbnailUrl || null)
         setCoverPreview(editingPin.customThumbnailUrl || null)
         setThumbDbKey(editingPin.thumbnailDbKey)
+        if (editingPin.thumbnailDbKey) {
+          getBlobUrl(editingPin.thumbnailDbKey).then((url) => {
+            if (url) setCoverPreview(url)
+          })
+        }
         setUrlError('')
         if (editingPin.parts && editingPin.parts.length > 0) {
           setImportedParts(editingPin.parts)
@@ -231,7 +257,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
       const res = await fetchYoutubePlaylist(playlistId)
       setIsLoadingPlaylist(false)
 
-      if (res.title && !title) {
+      if (res.title && (!title || title === getFallbackTitleFromUrl(url))) {
         setTitle(res.title)
       }
       if (res.author && !channelName) {
@@ -326,17 +352,19 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
     }
 
     // 2. Fetch metadata via oembed
-    if (/^https?:\/\//i.test(trimmed)) {
+    if (/^https?:\/\//i.test(trimmed) || /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/i.test(trimmed)) {
+      const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
       setIsLoadingMeta(true)
       try {
-        const meta = await fetchVideoMeta(trimmed)
-        if (meta.title && !title) setTitle(meta.title)
+        const meta = await fetchVideoMeta(normalized)
+        const fallback = getFallbackTitleFromUrl(trimmed)
+        if (meta.title && (!title || title === fallback)) setTitle(meta.title)
         if (meta.author && !channelName) setChannelName(meta.author)
         if (meta.thumbnailUrl && !ytId && !coverPreview) {
           setAutoThumbUrl(meta.thumbnailUrl)
         }
       } catch {
-        // graceful fallback
+        // graceful fallback - never block!
       } finally {
         setIsLoadingMeta(false)
       }
@@ -400,14 +428,20 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   // Submit Single Pin
   const handleSingleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!url.trim()) {
+    const trimmedUrl = url.trim()
+    const finalParts: PlaylistPart[] | undefined =
+      isImportPlaylist && importedParts.length > 0
+        ? importedParts
+        : editingPin?.parts
+
+    const effectiveUrl = trimmedUrl || (finalParts && finalParts[0]?.url) || ''
+    if (!effectiveUrl) {
       setUrlError('Вставьте ссылку на медиа')
       return
     }
-    if (!title.trim()) {
-      setUrlError('Укажите название закрепа')
-      return
-    }
+
+    // Instant and unconditional title: fallback to URL domain/link if user didn't type title
+    const finalTitle = title.trim() || getFallbackTitleFromUrl(effectiveUrl)
 
     const parsedTags = tagsInput
       .split(',')
@@ -424,7 +458,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
     // ── Mode B: Import playlist as a new collection / tab ──
     if (detectedPlaylistId && playlistSaveMode === 'collection' && onImportPlaylistAsCollection) {
-      const playlistName = title.trim() || 'Плейлист YouTube'
+      const playlistName = finalTitle || 'Плейлист YouTube'
       const generatedPins: Pin[] =
         importedParts.length > 0
           ? importedParts.map((p, idx) => {
@@ -448,7 +482,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
               {
                 id: uid(),
                 title: playlistName,
-                url: url.trim(),
+                url: effectiveUrl,
                 platform: 'youtube' as Platform,
                 contentType: 'series' as ContentType,
                 category: '',
@@ -466,11 +500,6 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
       return
     }
 
-    const finalParts: PlaylistPart[] | undefined =
-      isImportPlaylist && importedParts.length > 0
-        ? importedParts
-        : editingPin?.parts
-
     const finalContentType: ContentType =
       finalParts && finalParts.length > 0
         ? contentType === 'lecture'
@@ -482,8 +511,8 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
     const targetPin: Pin = {
       id: editingPin ? editingPin.id : uid(),
-      title: title.trim(),
-      url: finalParts && finalParts[0] && !url.trim() ? finalParts[0].url : url.trim(),
+      title: finalTitle,
+      url: effectiveUrl,
       platform,
       contentType: finalContentType,
       category,
@@ -572,10 +601,6 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
   // Submit Playlist / Multi-part Collection
   const handlePlaylistSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!playlistTitle.trim()) {
-      alert('Укажите название плейлиста или саги')
-      return
-    }
     const validParts = playlistParts.filter((p) => p.url.trim().length > 0)
     if (validParts.length === 0) {
       alert('Добавьте хотя бы одну часть со ссылкой')
@@ -584,6 +609,8 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
     const now = new Date().toISOString()
     const firstUrl = validParts[0].url.trim()
+    const finalPlaylistTitle =
+      playlistTitle.trim() || getFallbackTitleFromUrl(firstUrl) || 'Новый плейлист'
     const plat = detectPlatform(firstUrl)
     const ytId = extractYouTubeId(firstUrl)
 
@@ -597,7 +624,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
 
     const newPin: Pin = {
       id: uid(),
-      title: playlistTitle.trim(),
+      title: finalPlaylistTitle,
       url: firstUrl,
       platform: plat,
       contentType: 'series',
@@ -818,7 +845,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                               )}
                             </div>
                             <p className="text-[10px] text-white/50 leading-relaxed">
-                              1 карточка со счётчиком (1/{importedParts.length || 15}), прогресс-баром и списком роликов
+                              1 карточка со счётчиком ({importedParts.length > 0 ? `1/${importedParts.length}` : 'список роликов'}), прогресс-баром и переключением
                             </p>
                           </button>
 
@@ -843,7 +870,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                               )}
                             </div>
                             <p className="text-[10px] text-white/50 leading-relaxed">
-                              Создаст вкладку «{title || 'Плейлист'}» и добавит все видео отдельными карточками
+                              Создаст вкладку «{title || (url ? getFallbackTitleFromUrl(url) : 'Плейлист')}» и добавит все видео отдельными карточками
                             </p>
                           </button>
                         </div>
@@ -900,7 +927,7 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                             className="text-[11px] text-[#f3e5ab]/80 hover:text-[#f3e5ab] flex items-center gap-1 cursor-pointer"
                           >
                             <Plus size={11} />
-                            <span>Вставить ссылки списком (если нужно загрузить больше 15 видео)</span>
+                            <span>Вставить ссылки списком вручную</span>
                             {showFallbackManualInput ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                           </button>
 
@@ -947,14 +974,14 @@ export const AddPinModal: React.FC<AddPinModalProps> = ({
                       className="text-[10px] text-white/40 mb-1.5 block uppercase tracking-wider"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
-                      Название *
+                      Название
                     </label>
                     <input
                       type="text"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Название видео, лекции или тайтла"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/20 focus:border-[#f3e5ab] transition-all"
+                      placeholder={url ? `Название (по умолчанию: ${getFallbackTitleFromUrl(url)})` : 'Название видео, лекции или тайтла'}
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white/90 placeholder:text-white/30 focus:border-[#f3e5ab] transition-all"
                     />
                   </div>
                   <div>

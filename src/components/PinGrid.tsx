@@ -86,14 +86,14 @@ export const PinGrid: React.FC<PinGridProps> = ({
   return (
     <div className="space-y-5">
       {/* ── Single Clean Navigation Bar: Left Collections, Right Status Filter ── */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
-        {/* Left: Collections Tabs Scrollable */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none min-w-0">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
+        {/* Left: Collections Tabs with flex-wrap so '+ Новый раздел' is never pushed out of screen */}
+        <div className="flex items-center flex-wrap gap-1.5 min-w-0 flex-1">
           {/* Base "Все" Tab */}
           <button
             type="button"
             onClick={() => onCategoryChange('all')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
               category === 'all'
                 ? 'btn-gold text-[#f3e5ab] shadow-sm'
                 : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
@@ -118,7 +118,7 @@ export const PinGrid: React.FC<PinGridProps> = ({
             return (
               <div
                 key={col.id}
-                className={`group flex items-center rounded-xl transition-all ${
+                className={`group flex items-center rounded-xl transition-all shrink-0 ${
                   active
                     ? 'btn-gold text-[#f3e5ab] shadow-sm'
                     : 'bg-white/[0.02] text-white/50 hover:text-white hover:bg-white/5 border border-white/5'
@@ -185,31 +185,31 @@ export const PinGrid: React.FC<PinGridProps> = ({
             )
           })}
 
-          {/* Compact "+" Button */}
+          {/* '+ Новый раздел' Button: Always visible, never pushed out */}
           <button
             type="button"
             onClick={onOpenAddCollection}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-[#f3e5ab]/80 hover:text-[#f3e5ab] border border-dashed border-[#f3e5ab]/30 hover:border-[#f3e5ab]/60 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-[#f3e5ab]/10 hover:bg-[#f3e5ab]/20 text-[#f3e5ab] border border-dashed border-[#f3e5ab]/40 hover:border-[#f3e5ab] transition-all cursor-pointer shrink-0 shadow-sm"
             title="Создать новый раздел"
           >
             <Plus size={13} />
-            <span className="hidden sm:inline">Новый раздел</span>
+            <span>Новый раздел</span>
           </button>
 
           {/* Manage Sections Gear Button */}
           <button
             type="button"
             onClick={onOpenManageCollections}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-white/50 hover:text-white border border-white/5 transition-all cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/[0.02] hover:bg-white/5 text-white/50 hover:text-white border border-white/5 transition-all cursor-pointer shrink-0"
             title="Управление разделами (порядок, переименование, удаление)"
           >
             <Settings2 size={13} />
-            <span className="hidden md:inline">Разделы</span>
+            <span>Разделы</span>
           </button>
         </div>
 
         {/* Right: Compact Status Filter */}
-        <div className="flex items-center gap-1 bg-white/[0.02] p-1 rounded-xl border border-white/5 shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-1 bg-white/[0.02] p-1 rounded-xl border border-white/5 shrink-0 self-start lg:self-auto">
           {STATUS_CONFIG.map((sf) => {
             const active = statusFilter === sf.value
             const count = getStatusCount(sf.value)

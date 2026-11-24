@@ -15,7 +15,8 @@ export function extractYouTubeId(url: string): string | null {
 /* ───── Platform detection ───── */
 export function detectPlatform(url: string): Platform {
   try {
-    const h = new URL(url).hostname.toLowerCase()
+    const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`
+    const h = new URL(normalized).hostname.toLowerCase()
     if (h.includes('youtube') || h.includes('youtu.be')) return 'youtube'
     if (h.includes('rutube')) return 'rutube'
     if (h.includes('vk.com') || h.includes('vkvideo')) return 'vk'

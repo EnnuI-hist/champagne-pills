@@ -27,7 +27,11 @@ export function useTheme() {
     root.setProperty('--g1', g1)
     root.setProperty('--g2', g2)
     root.setProperty('--accent', accent)
-    localStorage.setItem(KEY, JSON.stringify(settings))
+    try {
+      localStorage.setItem(KEY, JSON.stringify(settings))
+    } catch (err) {
+      console.error('Ошибка сохранения темы в localStorage:', err)
+    }
   }, [settings])
 
   const setPreset = useCallback((preset: ThemePreset) => setSettings(s => ({ ...s, preset })), [])

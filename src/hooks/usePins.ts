@@ -17,14 +17,25 @@ export function usePins() {
     setLoaded(true)
   }, [])
 
-  const sync = useCallback((next: Pin[]) => { setPins(next); savePins(next) }, [])
+  const sync = useCallback((next: Pin[]) => {
+    setPins(next)
+    try { savePins(next) } catch (err) { console.error(err) }
+  }, [])
 
   const addPin = useCallback((pin: Pin) => {
-    setPins(prev => { const n = [pin, ...prev]; savePins(n); return n })
+    setPins(prev => {
+      const n = [pin, ...prev]
+      try { savePins(n) } catch (err) { console.error(err) }
+      return n
+    })
   }, [])
 
   const updatePin = useCallback((p: Pin) => {
-    setPins(prev => { const n = prev.map(x => x.id === p.id ? p : x); savePins(n); return n })
+    setPins(prev => {
+      const n = prev.map(x => x.id === p.id ? p : x)
+      try { savePins(n) } catch (err) { console.error(err) }
+      return n
+    })
   }, [])
 
   const softDelete = useCallback((id: string) => {

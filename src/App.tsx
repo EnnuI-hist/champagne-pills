@@ -386,10 +386,17 @@ export default function App() {
 
       if (!isInput) {
         const text = e.clipboardData?.getData('text')
-        if (text && /^https?:\/\//i.test(text.trim())) {
-          e.preventDefault()
-          setInitialPasteUrl(text.trim())
-          setShowAddModal(true)
+        if (text) {
+          const trimmed = text.trim()
+          const isLikelyUrl =
+            /^https?:\/\//i.test(trimmed) ||
+            /^(www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/.*)?$/i.test(trimmed)
+          if (isLikelyUrl) {
+            e.preventDefault()
+            const normalizedUrl = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+            setInitialPasteUrl(normalizedUrl)
+            setShowAddModal(true)
+          }
         }
       }
     }
